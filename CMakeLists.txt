@@ -8,6 +8,8 @@ project(Machinate
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(cmake/CPM.cmake)
 
+option(MXN_PROFILEMODE "Allows profiling via Tracy." OFF)
+
 if(USE_CCACHE)
 	CPMAddPackage(
 		NAME Ccache.cmake
@@ -48,8 +50,11 @@ set(MXN_COMPILE_DEFS
 	GLM_FORCE_DEPTH_ZERO_TO_ONE # For Vulkan (OpenGL is -1.0 to 1.0)
 	GLM_FORCE_RADIANS
 	WIN32_LEAN_AND_MEAN
-	TRACY_ENABLE
 )
+
+if(MXN_PROFILEMODE)
+	list(APPEND MXN_COMPILE_DEFS TRACY_ENABLE)
+endif()
 
 if(MSVC)
 	# Disable Windows min/max macros
