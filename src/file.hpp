@@ -24,11 +24,17 @@ namespace mxn
 	 * `SDL_GetPrefPath`.
 	 * @sa https://wiki.libsdl.org/SDL_GetPrefPath
 	 */
-	std::string get_userdata_path(const std::string& appname) noexcept;
+	[[nodiscard]] std::string get_userdata_path(const std::string& appname) noexcept;
 
 	void vfs_init(const std::string& argv0);
 	void vfs_deinit();
 	void vfs_mount(
-		const std::filesystem::path& path,
-		const std::filesystem::path& mount_point);
+		const std::filesystem::path& path, const std::filesystem::path& mount_point);
+
+	[[nodiscard]] bool vfs_exists(const std::filesystem::path&) noexcept;
+	[[nodiscard]] bool vfs_isdir(const std::filesystem::path&) noexcept;
+	[[nodiscard]] uint32_t vfs_count(const std::filesystem::path&) noexcept;
+
+	void vfs_read(const std::filesystem::path&, std::vector<unsigned char>&);
+	void ccmd_file(const std::string& path);
 } // namespace mxn

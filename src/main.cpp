@@ -24,6 +24,8 @@ int main(const int arg_c, const char* const argv[])
 		Machinate_VERSION_PATCH);
 
 	mxn::vfs_init(argv[0]);
+	mxn::vfs_mount("assets", "/");
+
 	mxn::media_context media;
 	mxn::window main_window("Machinate");
 	mxn::vk::context renderer(main_window.get_sdl_window());
@@ -44,12 +46,23 @@ int main(const int arg_c, const char* const argv[])
 		  .func = [&](const std::vector<std::string> args) -> void {
 			  renderer.vkdiag(std::move(args));
 		  },
-		  .help = [&](const std::vector<std::string> args) -> void {
+		  .help = [](const std::vector<std::string> args) -> void {
 				MXN_LOG(
 					"Print information about the Vulkan renderer or this "
 					"system's Vulkan implementation.");
 				MXN_LOG("Usage: vkdiag ext|gpu|queue");
 		  } });
+	console.add_command(
+		{
+			.key = "file",
+			.func = [&](const std::vector<std::string> args) -> void {
+				mxn::ccmd_file(args.size() > 1 ? args[1] : "/");
+			},
+			.help = [](const std::vector<std::string> args) -> void {
+				MXN_LOG("List the contents of a directory in the virtual file system.");
+			}
+		}
+	);
 
 	std::thread render_thread([&]() -> void {
 		tracy::SetThreadName("Render");

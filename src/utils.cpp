@@ -74,6 +74,110 @@ void mxn::vfs_mount(const stdfs::path& path, const stdfs::path& mount_point)
 		MXN_LOGF("Mounted {} as \"{}\"", path.string(), mount_point.string());
 }
 
+bool mxn::vfs_exists(const stdfs::path& path) noexcept
+{
+	return PHYSFS_exists(path.c_str());
+}
+
+bool mxn::vfs_isdir(const stdfs::path& path) noexcept
+{
+	PHYSFS_Stat stat;
+	[[maybe_unused]] const int pfs_err_stat = PHYSFS_stat(path.c_str(), &stat);
+	assert(pfs_err_stat != 0);
+	return stat.filetype == PHYSFS_FILETYPE_DIRECTORY;
+}
+
+uint32_t mxn::vfs_count(const stdfs::path& path) noexcept
+{
+	if (!vfs_exists(path)) return 0;
+
+	char** files = PHYSFS_enumerateFiles(path.empty() ? "/" : path.c_str());
+	uint32_t ret = 0;
+
+	for (char** f = files; *f != nullptr; f++)
+		ret++;
+
+	PHYSFS_freeList(files);
+	return ret;
+}
+
+void mxn::vfs_read(const stdfs::path& path, std::vector<unsigned char>& buffer)
+{
+	assert(buffer.empty());
+
+	if (!vfs_exists(path))
+	{
+		MXN_ERRF("Attempted to read file from unknown path: {}", path.string());
+		return;
+	}
+
+	if (vfs_isdir(path))
+	{
+		MXN_ERRF("Illegal attempt to read directory: {}", path.string());
+		return;
+	}
+
+	PHYSFS_File* pfs = PHYSFS_openRead(path.c_str());
+	if (pfs == nullptr)
+	{
+		MXN_ERRF("Failed to open file for read: {}\n\t{}",
+			path.string(), PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
+		return;
+	}
+
+	const PHYSFS_sint64 len = PHYSFS_fileLength(pfs);
+
+	if (len <= -1)
+	{
+		MXN_ERRF("Failed to determine file length: {}\n\t{}",
+			path.string(), PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
+		return;
+	}
+
+	buffer.resize(static_cast<size_t>(len));
+	const PHYSFS_sint64 read = PHYSFS_readBytes(pfs, buffer.data(), len);
+
+	if (read <= -1)
+	{
+		MXN_ERRF("Error while reading file: {}\n\t{}",
+			path.string(), PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
+		return;
+	}
+
+	if (static_cast<size_t>(read) < buffer.size() && PHYSFS_eof(pfs) == 0)
+	{
+		MXN_ERRF(
+			"Incomplete read of file: {}\n\t{}", path.string(),
+			PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
+		return;
+	}
+
+	if (PHYSFS_close(pfs) == 0)
+	{
+		MXN_ERRF("Failed to close virtual file handle: {}\n\t{}",
+			path.string(), PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
+	}
+}
+
+void mxn::ccmd_file(const std::string& path)
+{
+	if (!vfs_exists(stdfs::path(path)))
+	{
+		MXN_LOGF("Non-existent path: {}", path);
+		return;
+	}
+
+	char** files = PHYSFS_enumerateFiles(path.c_str());
+	MXN_LOGF("Files under \"{}\" ({}):", path, vfs_count(stdfs::path(path)));
+
+	for (char** f = files; *f != nullptr; f++)
+	{
+		MXN_LOGF("\t{}", std::string(*f));
+	}
+
+	PHYSFS_freeList(files);
+}
+
 const std::chrono::system_clock::time_point mxn::start_time =
 	std::chrono::system_clock::now();
 
