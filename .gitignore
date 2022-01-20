@@ -1,0 +1,28 @@
+# Text editor, IDE, etc.
+/.vs
+/.vscode/
+/.atomignore
+/CMakeSettings.json
+
+# Build-generated files
+/build*
+/out*
+
+# Dear ImGui user data
+imgui.ini
+
+# Runtime logs
+*.log
+
+# Generated Doxygen
+/doc/docbook/
+/doc/html/
+/doc/latex/
+/doc/man/
+/doc/rtf/
+/doc/xml/
+
+# SPIR-V
+*.spv
+
+tracy*

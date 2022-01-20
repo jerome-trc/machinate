@@ -1,0 +1,81 @@
+---
+BasedOnStyle: Microsoft
+ColumnLimit: 90
+IndentWidth: 4
+TabWidth: 4
+---
+Language: Cpp
+AccessModifierOffset: -4
+AlignAfterOpenBracket: AlwaysBreak
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignConsecutiveMacros: false
+AlignEscapedNewlines: Left
+AlignTrailingComments: false
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+AllowShortLambdasOnASingleLine: All
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+AlwaysBreakTemplateDeclarations: Yes
+BinPackParameters: true
+BraceWrapping:
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+BreakBeforeBraces: Allman
+BreakBeforeBinaryOperators: None
+Cpp11BracedListStyle: false
+DerivePointerAlignment: false
+FixNamespaceComments: true
+IncludeBlocks: Regroup
+IndentCaseLabels: false
+IndentGotoLabels: false
+IndentWrappedFunctionNames: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: All
+PointerAlignment: Left
+SortIncludes: true
+SortUsingDeclarations: true
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: true
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: true
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInAngles: false
+SpacesInCStyleCastParentheses: false
+SpacesInConditionalStatement: false
+SpacesInContainerLiterals: true
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+Standard: c++20
+UseTab: Always
+
+# Hypothetically-desired flags which aren't compatible with this setup
+
+# AlignConsecutiveBitFields: None
+# AllowShortEnumsOnASingleLine: true
+# BitFieldColonSpacing: Both
+# EmptyLineBeforeAccessModifier: LogicalBlock
+# IndentAccessModifiers: false
+# IndentCaseBlocks: false
+# IndentRequires: true
+# PPIndentWidth: 4
+# ShortNamespaceLines: 50
+# SpaceAroundPointerQualifiers: Default
+# SpaceBeforeCaseColon: false
+# SpacesInLineCommentPrefix:
+#   Maximum: 1
+#   Minimum: 1
+...

@@ -1,0 +1,9 @@
+// Brief: Variables passed from CMake to the source.
+
+// clang-format off
+
+#define Machinate_VERSION_MAJOR @Machinate_VERSION_MAJOR@
+#define Machinate_VERSION_MINOR @Machinate_VERSION_MINOR@
+#define Machinate_VERSION_PATCH @Machinate_VERSION_PATCH@
+
+// clang-format on
