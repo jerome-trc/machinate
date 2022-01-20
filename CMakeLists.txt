@@ -68,7 +68,7 @@ if(MSVC)
 	list(APPEND MXN_LIBS winmm imm32)
 endif()
 
-# Targets ######################################################################
+# Targets: Game client #########################################################
 
 add_executable(${PROJECT_NAME}
 	"${CMAKE_SOURCE_DIR}/src/console.cpp"
@@ -98,6 +98,58 @@ target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE ${MXN_LIBS})
+
+# Targets: Utility for moving assets and compiling shaders #####################
+
+set(MXN_TGT_ASSETS "${PROJECT_NAME}_Assets")
+add_custom_target("${PROJECT_NAME}_Assets")
+
+file(GLOB_RECURSE MXN_ASSETS RELATIVE "${CMAKE_SOURCE_DIR}/assets"
+	"${CMAKE_SOURCE_DIR}/assets/fonts/*"
+	"${CMAKE_SOURCE_DIR}/assets/loc/*"
+	"${CMAKE_SOURCE_DIR}/assets/meshes/*"
+	"${CMAKE_SOURCE_DIR}/assets/textures/*"
+)
+
+file(GLOB_RECURSE MXN_SHADERS RELATIVE "${CMAKE_SOURCE_DIR}/assets/shaders"
+	"${CMAKE_SOURCE_DIR}/assets/shaders/*.comp"
+	"${CMAKE_SOURCE_DIR}/assets/shaders/*.frag"
+	"${CMAKE_SOURCE_DIR}/assets/shaders/*.tese"
+	"${CMAKE_SOURCE_DIR}/assets/shaders/*.tesc"
+	"${CMAKE_SOURCE_DIR}/assets/shaders/*.vert"
+)
+
+foreach(EACH_FILE ${MXN_ASSETS})
+	set(SOURCE_FILE "${CMAKE_SOURCE_DIR}/assets/${EACH_FILE}")
+	set(DEST_FILE "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/${EACH_FILE}")
+	if(NOT EXISTS ${DEST_FILE} OR ${SOURCE_FILE} IS_NEWER_THAN ${DEST_FILE})
+		get_filename_component(DEST_SUBDIR ${DEST_FILE} DIRECTORY)
+		add_custom_command(TARGET ${MXN_TGT_ASSETS} PRE_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy
+			"${CMAKE_SOURCE_DIR}/assets/${EACH_FILE}"
+			"$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/${EACH_FILE}"
+		)
+	endif()
+endforeach()
+
+add_custom_command(TARGET ${MXN_TGT_ASSETS} PRE_BUILD COMMAND ${CMAKE_COMMAND}
+	-E make_directory "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/shaders"
+)
+
+if(UNIX)
+	foreach(EACH_FILE ${MXN_SHADERS})
+		set(SOURCE_FILE "${CMAKE_SOURCE_DIR}/assets/shaders/${EACH_FILE}")
+		set(DEST_FILE "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/shaders/${EACH_FILE}.spv")
+		
+		if(EXISTS ${DEST_FILE} OR NOT ${SOURCE_FILE} IS_NEWER_THAN ${DEST_FILE})
+			continue()
+		endif()
+
+		add_custom_command(TARGET ${MXN_TGT_ASSETS} PRE_BUILD COMMAND
+			"glslc" ${SOURCE_FILE} "-o" ${DEST_FILE}
+		)
+	endforeach()
+endif()
 
 # CTest ########################################################################
 
