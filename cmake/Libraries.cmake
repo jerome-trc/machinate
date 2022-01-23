@@ -28,6 +28,15 @@ CPMAddPackage(
 	OPTIONS ${MXN_DAS_OPTIONS}
 )
 
+include("${CMAKE_SOURCE_DIR}/cmake/AssimpSettings.cmake")
+CPMAddPackage(
+	NAME assimp
+	VERSION 5.1.6
+	GITHUB_REPOSITORY assimp/assimp 
+	GIT_TAG v5.1.6
+	OPTIONS ${MXN_ASSIMP_OPTIONS}
+)
+
 find_package(fmt CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
@@ -39,6 +48,7 @@ find_package(Vulkan REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
 
 set(MXN_LIBS
+	assimp::assimp
 	glm::glm
 	imgui::imgui
 	libDaScript
