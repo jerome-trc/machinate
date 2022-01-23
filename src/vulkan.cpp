@@ -50,17 +50,14 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_messenger_callback(
 	switch (severity)
 	{
 	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-		if (streq(cbdata->pMessageIdName, "Loader Message"))
-			break;
-		
+		if (streq(cbdata->pMessageIdName, "Loader Message")) break;
+
 		MXN_DEBUGF("(VK) {}\n\t{}", TYPE_NAMES[type], cbdata->pMessage);
 		break;
 	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-		break;
 		MXN_WARNF("(VK) {}\n\t{}", TYPE_NAMES[type], cbdata->pMessage);
 		break;
 	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-		break;
 		MXN_ERRF("(VK) {}\n\t{}", TYPE_NAMES[type], cbdata->pMessage);
 		break;
 	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: break;
