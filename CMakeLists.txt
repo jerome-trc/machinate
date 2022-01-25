@@ -80,8 +80,14 @@ add_executable(${PROJECT_NAME}
 	"${CMAKE_SOURCE_DIR}/src/main.cpp"
 	"${CMAKE_SOURCE_DIR}/src/media.cpp"
 	"${CMAKE_SOURCE_DIR}/src/utils.cpp"
-	"${CMAKE_SOURCE_DIR}/src/vk_mem_alloc.cpp"
-	"${CMAKE_SOURCE_DIR}/src/vulkan.cpp"
+
+	"${CMAKE_SOURCE_DIR}/src/vk/buffer.cpp"
+	"${CMAKE_SOURCE_DIR}/src/vk/context.cpp"
+	"${CMAKE_SOURCE_DIR}/src/vk/image.cpp"
+	"${CMAKE_SOURCE_DIR}/src/vk/model.cpp"
+	"${CMAKE_SOURCE_DIR}/src/vk/pipeline.cpp"
+	"${CMAKE_SOURCE_DIR}/src/vk/vk_mem_alloc.cpp"
+
 	"${CMAKE_SOURCE_DIR}/tracy/TracyClient.cpp"
 )
 

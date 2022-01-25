@@ -8,12 +8,12 @@
 #include "src/defines.hpp"
 #include "string.hpp"
 #include "time.hpp"
-#include "vulkan.hpp"
+#include "vk/context.hpp"
 
 #include <SDL2/SDL.h>
+#include <Tracy.hpp>
 #include <imgui_impl_sdl.h>
 #include <imgui_impl_vulkan.h>
-#include <Tracy.hpp>
 
 int main(const int arg_c, const char* const argv[])
 {
@@ -41,28 +41,24 @@ int main(const int arg_c, const char* const argv[])
 
 	// Developer/debug console initialisation
 	mxn::console console;
+	console.add_command({ .key = "vkdiag",
+						  .func = [&](const std::vector<std::string> args) -> void {
+							  renderer.vkdiag(std::move(args));
+						  },
+						  .help = [](const std::vector<std::string> args) -> void {
+							  MXN_LOG(
+								  "Print information about the Vulkan renderer or this "
+								  "system's Vulkan implementation.");
+							  MXN_LOG("Usage: vkdiag ext|gpu|queue");
+						  } });
 	console.add_command(
-		{ .key = "vkdiag",
+		{ .key = "file",
 		  .func = [&](const std::vector<std::string> args) -> void {
-			  renderer.vkdiag(std::move(args));
+			  mxn::ccmd_file(args.size() > 1 ? args[1] : "/");
 		  },
 		  .help = [](const std::vector<std::string> args) -> void {
-				MXN_LOG(
-					"Print information about the Vulkan renderer or this "
-					"system's Vulkan implementation.");
-				MXN_LOG("Usage: vkdiag ext|gpu|queue");
+			  MXN_LOG("List the contents of a directory in the virtual file system.");
 		  } });
-	console.add_command(
-		{
-			.key = "file",
-			.func = [&](const std::vector<std::string> args) -> void {
-				mxn::ccmd_file(args.size() > 1 ? args[1] : "/");
-			},
-			.help = [](const std::vector<std::string> args) -> void {
-				MXN_LOG("List the contents of a directory in the virtual file system.");
-			}
-		}
-	);
 
 	std::thread render_thread([&]() -> void {
 		tracy::SetThreadName("Render");
@@ -70,8 +66,7 @@ int main(const int arg_c, const char* const argv[])
 		{
 			main_window.new_imgui_frame();
 
-			if (draw_imgui_metrics)
-				ImGui::ShowMetricsWindow(&draw_imgui_metrics);
+			if (draw_imgui_metrics) ImGui::ShowMetricsWindow(&draw_imgui_metrics);
 
 			console.draw();
 
@@ -95,7 +90,7 @@ int main(const int arg_c, const char* const argv[])
 			case SDL_QUIT: running = false; break;
 			case SDL_WINDOWEVENT:
 				main_window.handle_event(event);
-				running = main_window.valid();
+				if (!main_window.valid()) running = false;
 				break;
 			case SDL_MOUSEMOTION:
 			{
@@ -108,13 +103,9 @@ int main(const int arg_c, const char* const argv[])
 
 				switch (event.key.keysym.sym)
 				{
-				case SDLK_BACKQUOTE:
-					console.toggle();
-					break;
+				case SDLK_BACKQUOTE: console.toggle(); break;
 				// TODO: Binding immediate termination to escape is temporary
-				case SDLK_ESCAPE:
-					running = false;
-					break;
+				case SDLK_ESCAPE: running = false; break;
 				default: break;
 				} // switch (event.key.keysym.sym)
 				break;

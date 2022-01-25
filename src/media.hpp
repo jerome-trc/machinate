@@ -7,6 +7,9 @@
 
 #include "preproc.hpp"
 
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/vec3.hpp>
 #include <string>
 #include <vector>
 
@@ -15,6 +18,19 @@ union SDL_Event;
 
 namespace mxn
 {
+	struct camera final
+	{
+		alignas(16) glm::vec3 position;
+		alignas(16) glm::quat rotation;
+		alignas(16) glm::vec3 vel_linear, vel_angular;
+
+		[[nodiscard]] glm::mat4 view() const
+		{
+			return glm::transpose(glm::toMat4(rotation)) *
+				   glm::translate(glm::mat4(1.0f), -position);
+		}
+	};
+
 	class window final
 	{
 		static constexpr int DEFAULT_WINDOW_WIDTH = 800, DEFAULT_WINDOW_HEIGHT = 600;

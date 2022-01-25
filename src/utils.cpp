@@ -10,7 +10,6 @@
 
 #include <SDL2/SDL.h>
 #include <mutex>
-#include <physfs.h>
 
 namespace stdfs = std::filesystem;
 
@@ -62,9 +61,7 @@ void mxn::vfs_mount(const stdfs::path& path, const stdfs::path& mount_point)
 	if (!stdfs::exists(path))
 	{ MXN_ERRF("Attempted to mount non-existent path: {}", path.string()); }
 
-	const int err = PHYSFS_mount(path.c_str(), mount_point.c_str(), 1);
-
-	if (err == 0)
+	if (PHYSFS_mount(path.c_str(), mount_point.c_str(), 1) == 0)
 	{
 		MXN_ERRF(
 			"Failed to mount {} as \"{}\":\n\t{}", path.string(), mount_point.string(),
@@ -76,14 +73,19 @@ void mxn::vfs_mount(const stdfs::path& path, const stdfs::path& mount_point)
 
 bool mxn::vfs_exists(const stdfs::path& path) noexcept
 {
-	return PHYSFS_exists(path.c_str());
+	return PHYSFS_exists(path.c_str()) != 0;
 }
 
 bool mxn::vfs_isdir(const stdfs::path& path) noexcept
 {
-	PHYSFS_Stat stat;
-	[[maybe_unused]] const int pfs_err_stat = PHYSFS_stat(path.c_str(), &stat);
-	assert(pfs_err_stat != 0);
+	PHYSFS_Stat stat = {};
+
+	if (PHYSFS_stat(path.c_str(), &stat) == 0)
+	{
+		MXN_ERRF("Requested directory status of invalid file: {}", path.string());
+		return false;
+	}
+
 	return stat.filetype == PHYSFS_FILETYPE_DIRECTORY;
 }
 
@@ -94,8 +96,7 @@ uint32_t mxn::vfs_count(const stdfs::path& path) noexcept
 	char** files = PHYSFS_enumerateFiles(path.empty() ? "/" : path.c_str());
 	uint32_t ret = 0;
 
-	for (char** f = files; *f != nullptr; f++)
-		ret++;
+	for (char** f = files; *f != nullptr; f++) ret++;
 
 	PHYSFS_freeList(files);
 	return ret;
@@ -107,7 +108,7 @@ void mxn::vfs_read(const stdfs::path& path, std::vector<unsigned char>& buffer)
 
 	if (!vfs_exists(path))
 	{
-		MXN_ERRF("Attempted to read file from unknown path: {}", path.string());
+		MXN_ERRF("Attempted to read file from non-existent path: {}", path.string());
 		return;
 	}
 
@@ -120,8 +121,9 @@ void mxn::vfs_read(const stdfs::path& path, std::vector<unsigned char>& buffer)
 	PHYSFS_File* pfs = PHYSFS_openRead(path.c_str());
 	if (pfs == nullptr)
 	{
-		MXN_ERRF("Failed to open file for read: {}\n\t{}",
-			path.string(), PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
+		MXN_ERRF(
+			"Failed to open file for read: {}\n\t{}", path.string(),
+			PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
 		return;
 	}
 
@@ -129,8 +131,9 @@ void mxn::vfs_read(const stdfs::path& path, std::vector<unsigned char>& buffer)
 
 	if (len <= -1)
 	{
-		MXN_ERRF("Failed to determine file length: {}\n\t{}",
-			path.string(), PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
+		MXN_ERRF(
+			"Failed to determine file length: {}\n\t{}", path.string(),
+			PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
 		return;
 	}
 
@@ -139,8 +142,9 @@ void mxn::vfs_read(const stdfs::path& path, std::vector<unsigned char>& buffer)
 
 	if (read <= -1)
 	{
-		MXN_ERRF("Error while reading file: {}\n\t{}",
-			path.string(), PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
+		MXN_ERRF(
+			"Error while reading file: {}\n\t{}", path.string(),
+			PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
 		return;
 	}
 
@@ -154,8 +158,18 @@ void mxn::vfs_read(const stdfs::path& path, std::vector<unsigned char>& buffer)
 
 	if (PHYSFS_close(pfs) == 0)
 	{
-		MXN_ERRF("Failed to close virtual file handle: {}\n\t{}",
-			path.string(), PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
+		MXN_ERRF(
+			"Failed to close virtual file handle: {}\n\t{}", path.string(),
+			PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
+	}
+}
+
+void mxn::vfs_recur(const stdfs::path& path, void* userdata, vfs_enumerator func)
+{
+	if (PHYSFS_enumerate(path.c_str(), func, userdata) == 0)
+	{
+		MXN_ERRF(
+			"VFS recursion failed: {}", PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
 	}
 }
 
@@ -170,10 +184,7 @@ void mxn::ccmd_file(const std::string& path)
 	char** files = PHYSFS_enumerateFiles(path.c_str());
 	MXN_LOGF("Files under \"{}\" ({}):", path, vfs_count(stdfs::path(path)));
 
-	for (char** f = files; *f != nullptr; f++)
-	{
-		MXN_LOGF("\t{}", std::string(*f));
-	}
+	for (char** f = files; *f != nullptr; f++) { MXN_LOGF("\t{}", std::string(*f)); }
 
 	PHYSFS_freeList(files);
 }

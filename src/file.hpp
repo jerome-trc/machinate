@@ -8,10 +8,14 @@
 #include "log.hpp"
 
 #include <filesystem>
+#include <physfs.h>
 #include <string>
 
 namespace mxn
 {
+	using vfs_enumerator =
+		PHYSFS_EnumerateCallbackResult (*)(void*, const char*, const char*);
+
 	/** @brief Absolute path to the executable's directory. Ends with a path
 	 * separator. */
 	extern const std::string base_path;
@@ -36,5 +40,7 @@ namespace mxn
 	[[nodiscard]] uint32_t vfs_count(const std::filesystem::path&) noexcept;
 
 	void vfs_read(const std::filesystem::path&, std::vector<unsigned char>&);
+	void vfs_recur(const std::filesystem::path&, void* userdata, vfs_enumerator);
+
 	void ccmd_file(const std::string& path);
 } // namespace mxn

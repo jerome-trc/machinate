@@ -49,3 +49,7 @@ Note that this is a living document. Completeness is not guaranteed. If no autho
 	- By Lars "TheLartians" Melchior et. al.
 	- Unlicensed.
 	- https://github.com/TheLartians/Ccache.cmake
+
+## Code
+
+- Machinate's Vulkan renderer is based on the work of Ruoyu "WindyDarian" Fan and Xueyin Wan, and is used under the [MIT License](https://github.com/WindyDarian/Vulkan-Forward-Plus-Renderer/blob/master/LICENSE).
