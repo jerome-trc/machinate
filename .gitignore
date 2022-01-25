@@ -25,4 +25,7 @@ imgui.ini
 # SPIR-V
 *.spv
 
+# RenderDoc's capture setting preset
+*.cap
+
 tracy*
