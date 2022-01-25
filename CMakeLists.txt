@@ -119,6 +119,7 @@ file(GLOB_RECURSE MXN_ASSETS RELATIVE "${CMAKE_SOURCE_DIR}/assets"
 	"${CMAKE_SOURCE_DIR}/assets/fonts/*"
 	"${CMAKE_SOURCE_DIR}/assets/loc/*"
 	"${CMAKE_SOURCE_DIR}/assets/meshes/*"
+	"${CMAKE_SOURCE_DIR}/assets/scripts/*"
 	"${CMAKE_SOURCE_DIR}/assets/textures/*"
 )
 
