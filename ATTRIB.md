@@ -31,6 +31,10 @@ Note that this is a living document. Completeness is not guaranteed. If no autho
 - Simple DirectMedia Layer 2 (SDL2)
 	- By Sam Lantinga et. al
 	- https://www.libsdl.org/
+- Simple OpenGL Image Library 2 (SOIL2)
+	- By Martín Lucas "SpartanJ" Golini et. al.
+	- Used under the [MIT No Attribution License](https://github.com/SpartanJ/SOIL2/blob/master/LICENSE).
+	- https://github.com/SpartanJ/SOIL2
 - Tracy
 	- By Bartosz "wolfpld" Taudul et. al.
 	- Used under the [BSD 3-Clause License](https://github.com/wolfpld/tracy/blob/master/LICENSE).
@@ -38,6 +42,10 @@ Note that this is a living document. Completeness is not guaranteed. If no autho
 	- By the Khronos Group.
 	- [See licensing information.](https://www.khronos.org/legal/trademarks/)
 	- https://www.vulkan.org/
+- xxHash
+	- By Yann "Cyan4973" Collet et. al.
+	- Used under [BSD 2-Clause License](https://github.com/Cyan4973/xxHash/blob/dev/LICENSE).
+	- https://github.com/Cyan4973/xxHash
 
 ## Toolchain
 

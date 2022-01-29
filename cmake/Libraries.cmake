@@ -45,8 +45,10 @@ find_package(magic_enum CONFIG REQUIRED)
 find_package(PhysFS REQUIRED)
 find_package(Quill CONFIG REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
+find_package(soil2 CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
+find_package(xxHash CONFIG REQUIRED)
 
 set(MXN_LIBS
 	assimp::assimp
@@ -58,8 +60,10 @@ set(MXN_LIBS
 	${PHYSFS_LIBRARY}
 	quill::quill
 	SDL2::SDL2main SDL2::SDL2-static
+	soil2
 	Vulkan::Vulkan
 	unofficial::vulkan-memory-allocator::vulkan-memory-allocator
+	xxHash::xxhash
 )
 
 if(UNIX)
