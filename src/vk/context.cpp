@@ -1733,7 +1733,7 @@ uint32_t context::ctor_get_qfam_trans() const
 ::vk::DispatchLoaderDynamic context::ctor_dispatch_loader() const
 {
 	::vk::DispatchLoaderDynamic dld(vkGetInstanceProcAddr);
-	dld.init(inst, device);
+	dld.init(inst);
 	return dld;
 }
 
