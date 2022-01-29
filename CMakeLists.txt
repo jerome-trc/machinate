@@ -101,9 +101,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_BINARY_DIR})
 target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
 	${THIRD_PARTY}
-	# ${BULLET_INCLUDE_DIR}
 	"${daScript_SOURCE_DIR}/include"
-	${LUAJIT_INCLUDE_DIR}
 	${PHYSFS_INCLUDE_DIR}
 	"${CMAKE_SOURCE_DIR}/tracy"
 )
