@@ -48,5 +48,15 @@ namespace mxn::vk
 		/// size of the resource within. The whole allocation can be mapped but
 		/// operations on the contained resource should be kept to that resource's size.
 		[[nodiscard]] ::vk::DeviceSize alloc_size(const VmaAllocator vma) const;
+
+		explicit operator bool() const noexcept
+		{
+			return buffer && memory && allocation != VK_NULL_HANDLE;
+		}
+
+		bool operator!() const noexcept
+		{
+			return !buffer && !memory && allocation == VK_NULL_HANDLE;
+		}
 	};
 } // namespace mxn::vk

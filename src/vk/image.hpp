@@ -36,6 +36,16 @@ namespace mxn::vk
 		vma_image(vma_image&&);
 		vma_image& operator=(vma_image&&);
 
+		explicit operator bool() const noexcept
+		{
+			return image && view && memory && allocation != VK_NULL_HANDLE;
+		}
+
+		bool operator!() const noexcept
+		{
+			return !image && !view && !memory && allocation == VK_NULL_HANDLE;
+		}
+
 		void destroy(const context&);
 	};
 } // namespace mxn::vk
