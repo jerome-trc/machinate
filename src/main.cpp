@@ -18,6 +18,12 @@
 int main(const int arg_c, const char* const argv[])
 {
 	tracy::SetThreadName("Main");
+
+	// Seed `rand()` for trivial RNG uses
+	const auto curTime = std::chrono::system_clock::now().time_since_epoch().count();
+	const auto curTime_uint = static_cast<unsigned int>(curTime);
+	srand(curTime_uint);
+
 	mxn::log_init();
 	MXN_LOGF(
 		"Machinate version {}.{}.{}", Machinate_VERSION_MAJOR, Machinate_VERSION_MINOR,
