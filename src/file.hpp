@@ -39,7 +39,7 @@ namespace mxn
 	[[nodiscard]] bool vfs_isdir(const std::filesystem::path&) noexcept;
 	[[nodiscard]] uint32_t vfs_count(const std::filesystem::path&) noexcept;
 
-	void vfs_read(const std::filesystem::path&, std::vector<unsigned char>&);
+	std::vector<unsigned char> vfs_read(const std::filesystem::path&);
 	void vfs_recur(const std::filesystem::path&, void* userdata, vfs_enumerator);
 
 	void ccmd_file(const std::string& path);

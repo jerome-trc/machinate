@@ -393,9 +393,7 @@ void context::rebuild_swapchain(SDL_Window* const window)
 ::vk::ShaderModule context::create_shader(
 	const std::filesystem::path& path, const std::string& debug_name) const
 {
-	std::vector<unsigned char> code = {};
-
-	vfs_read(path, code);
+	std::vector<unsigned char> code = vfs_read(path);
 
 	::vk::ShaderModule ret = device.createShaderModule(::vk::ShaderModuleCreateInfo(
 		::vk::ShaderModuleCreateFlags(), code.size(),

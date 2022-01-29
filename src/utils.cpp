@@ -102,20 +102,18 @@ uint32_t mxn::vfs_count(const stdfs::path& path) noexcept
 	return ret;
 }
 
-void mxn::vfs_read(const stdfs::path& path, std::vector<unsigned char>& buffer)
+std::vector<unsigned char> mxn::vfs_read(const stdfs::path& path)
 {
-	assert(buffer.empty());
-
 	if (!vfs_exists(path))
 	{
 		MXN_ERRF("Attempted to read file from non-existent path: {}", path.string());
-		return;
+		return {};
 	}
 
 	if (vfs_isdir(path))
 	{
 		MXN_ERRF("Illegal attempt to read directory: {}", path.string());
-		return;
+		return {};
 	}
 
 	PHYSFS_File* pfs = PHYSFS_openRead(path.c_str());
@@ -124,7 +122,7 @@ void mxn::vfs_read(const stdfs::path& path, std::vector<unsigned char>& buffer)
 		MXN_ERRF(
 			"Failed to open file for read: {}\n\t{}", path.string(),
 			PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
-		return;
+		return {};
 	}
 
 	const PHYSFS_sint64 len = PHYSFS_fileLength(pfs);
@@ -134,26 +132,27 @@ void mxn::vfs_read(const stdfs::path& path, std::vector<unsigned char>& buffer)
 		MXN_ERRF(
 			"Failed to determine file length: {}\n\t{}", path.string(),
 			PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
-		return;
+		return {};
 	}
 
-	buffer.resize(static_cast<size_t>(len));
-	const PHYSFS_sint64 read = PHYSFS_readBytes(pfs, buffer.data(), len);
+	std::vector<unsigned char> ret = {};
+	ret.resize(static_cast<size_t>(len));
+	const PHYSFS_sint64 read = PHYSFS_readBytes(pfs, ret.data(), len);
 
 	if (read <= -1)
 	{
 		MXN_ERRF(
 			"Error while reading file: {}\n\t{}", path.string(),
 			PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
-		return;
+		return {};
 	}
 
-	if (static_cast<size_t>(read) < buffer.size() && PHYSFS_eof(pfs) == 0)
+	if (static_cast<size_t>(read) < ret.size() && PHYSFS_eof(pfs) == 0)
 	{
 		MXN_ERRF(
 			"Incomplete read of file: {}\n\t{}", path.string(),
 			PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
-		return;
+		return {};
 	}
 
 	if (PHYSFS_close(pfs) == 0)
@@ -162,6 +161,8 @@ void mxn::vfs_read(const stdfs::path& path, std::vector<unsigned char>& buffer)
 			"Failed to close virtual file handle: {}\n\t{}", path.string(),
 			PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
 	}
+
+	return ret;
 }
 
 void mxn::vfs_recur(const stdfs::path& path, void* userdata, vfs_enumerator func)
