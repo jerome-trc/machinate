@@ -222,7 +222,13 @@ void mxn::log_init()
 	qlog->set_log_level(quill::LogLevel::Debug);
 }
 
-bool streq(const char* const s1, const char* const s2) { return strcmp(s1, s2) == 0; }
+bool streq(const char* const s1, const char* const s2)
+{
+	if (s1 == nullptr || s2 == nullptr)
+		return s1 == s2;
+	else
+		return strcmp(s1, s2) == 0;
+}
 
 std::vector<std::string> str_split(
 	const std::string& string, const std::string& delimiter)
