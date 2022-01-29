@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <vulkan/vulkan.hpp>
 
 struct VmaAllocation_T;
@@ -30,6 +31,8 @@ namespace mxn::vk
 		vma_image(
 			const context&, const ::vk::ImageCreateInfo&, ::vk::ImageViewCreateInfo&&,
 			const VmaAllocationCreateInfo&, const std::string& debug_postfix = "");
+
+		static vma_image from_file(const context&, const std::filesystem::path&);
 
 		vma_image(const vma_image&);
 		vma_image& operator=(const vma_image&);

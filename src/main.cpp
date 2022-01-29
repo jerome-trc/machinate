@@ -34,7 +34,7 @@ int main(const int arg_c, const char* const argv[])
 
 	mxn::media_context media;
 	mxn::window main_window("Machinate");
-	mxn::vk::context renderer(main_window.get_sdl_window());
+	mxn::vk::context vulkan(main_window.get_sdl_window());
 
 	// Script backend initialisation
 	NEED_ALL_DEFAULT_MODULES;
@@ -49,7 +49,7 @@ int main(const int arg_c, const char* const argv[])
 	mxn::console console;
 	console.add_command({ .key = "vkdiag",
 						  .func = [&](const std::vector<std::string> args) -> void {
-							  renderer.vkdiag(std::move(args));
+							  vulkan.vkdiag(std::move(args));
 						  },
 						  .help = [](const std::vector<std::string> args) -> void {
 							  MXN_LOG(
@@ -76,11 +76,22 @@ int main(const int arg_c, const char* const argv[])
 
 			console.draw();
 
-			renderer.start_render();
+			if (!vulkan.start_render())
+				vulkan.rebuild_swapchain(main_window.get_sdl_window());
 
-			if (!renderer.finish_render())
-				renderer.rebuild_swapchain(main_window.get_sdl_window());
+			vulkan.start_render_record();
+			vulkan.end_render_record();
+
+			const auto& sema_depth = vulkan.submit_prepass({});
+			const auto& sema_lc = vulkan.compute_lightcull(sema_depth);
+			const auto& sema_geom = vulkan.submit_geometry(sema_lc);
+			const auto& sema_imgui = vulkan.render_imgui(sema_geom);
+
+			if (!vulkan.present_frame(sema_imgui))
+				vulkan.rebuild_swapchain(main_window.get_sdl_window());
 		} while (running);
+
+		vulkan.device.waitIdle();
 	});
 
 	SDL_Event event = {};

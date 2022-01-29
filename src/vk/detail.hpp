@@ -43,11 +43,6 @@ namespace mxn::vk
 		glm::vec3 position;
 	};
 
-	struct material_info final
-	{
-		int has_albedo = 0, has_norm = 0;
-	};
-
 	static constexpr uint32_t INVALID_QUEUE_FAMILY = std::numeric_limits<uint32_t>::max(),
 							  MAX_POINTLIGHT_COUNT = 2000u;
 	static constexpr size_t POINTLIGHT_BUFSIZE =

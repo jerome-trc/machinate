@@ -38,9 +38,8 @@ static constexpr std::array DEVICE_EXTENSIONS = { VK_KHR_SWAPCHAIN_EXTENSION_NAM
 												  VK_KHR_MULTIVIEW_EXTENSION_NAME };
 
 #ifndef NDEBUG
-static constexpr std::array<const char*, 2> VALIDATION_LAYERS = {
-	"VK_LAYER_KHRONOS_validation", "VK_LAYER_LUNARG_standard_validation"
-};
+static constexpr std::array VALIDATION_LAYERS = { "VK_LAYER_KHRONOS_validation",
+												  "VK_LAYER_LUNARG_standard_validation" };
 #else
 static constexpr std::array<const char*, 0> VALIDATION_LAYERS = {};
 #endif
@@ -53,6 +52,10 @@ static_assert(TILE_BUFFERSIZE == (sizeof(int) * (MAX_POINTLIGHTS_PER_TILE + 1)))
 
 static constexpr std::array CLEAR_COLOUR = { 0.0f, 0.0f, 0.0f, 1.0f };
 static ::vk::ClearValue CLEAR_VAL = (::vk::ClearColorValue(CLEAR_COLOUR));
+
+static constexpr std::array<::vk::DescriptorImageInfo, 0> NO_DESCIMG_INFO = {};
+static constexpr std::array<::vk::DescriptorBufferInfo, 0> NO_DESCBUF_INFO = {};
+static constexpr std::array<::vk::BufferView, 0> NO_BUFVIEWS = {};
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_messenger_callback(
 	const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -137,7 +140,6 @@ context::context(SDL_Window* const window)
 
 	ubo_obj = ubo<glm::mat4>(*this, "Objects");
 	ubo_cam = ubo<camera>(*this, "Camera");
-	ubo_mat = ubo<material_info>(*this, "Material");
 	ubo_lights = ubo<std::vector<point_light>, POINTLIGHT_BUFSIZE>(
 		*this, qfam_gfx, 0u, "Point Lights");
 
@@ -242,6 +244,12 @@ context::context(SDL_Window* const window)
 	set_debug_name(cmdpool_gfx, "MXN: Command Pool, Graphics");
 	set_debug_name(cmdpool_trans, "MXN: Command Pool, Transfer");
 	set_debug_name(cmdpool_comp, "MXN: Command Pool, Compute");
+	set_debug_name(fence_render, "MXN: Fence, Render");
+	set_debug_name(sema_renderdone, "MXN: Semaphore, Render");
+	set_debug_name(sema_imgavail, "MXN: Semaphore, Image Acquiry");
+	set_debug_name(sema_lightculldone, "MXN: Semaphore, Light Cull");
+	set_debug_name(sema_prepassdone, "MXN: Semaphore, Depth Pre-pass");
+	set_debug_name(sema_imgui, "MXN: Semaphore, ImGui");
 }
 
 context::~context()
@@ -255,7 +263,6 @@ context::~context()
 	ubo_obj.destroy(*this);
 	ubo_cam.destroy(*this);
 	ubo_lights.destroy(*this);
-	ubo_mat.destroy(*this);
 
 	device.destroyDescriptorSetLayout(dsl_mat, nullptr);
 	device.destroyDescriptorSetLayout(dsl_inter, nullptr);
@@ -264,8 +271,8 @@ context::~context()
 	device.destroyDescriptorSetLayout(dsl_obj, nullptr);
 
 	device.freeDescriptorSets(
-		descpool, std::array { descset_obj, descset_cam, descset_lightcull, descset_inter,
-							   descset_mat });
+		descpool,
+		std::array { descset_obj, descset_cam, descset_lightcull, descset_inter });
 	device.destroyDescriptorPool(descpool);
 
 	device.destroyDescriptorPool(descpool_imgui);
@@ -291,13 +298,13 @@ bool context::start_render() noexcept
 {
 	ImGui::Render();
 
-	const auto res_fencewait = device.waitForFences(
+	[[maybe_unused]] const auto res_fencewait = device.waitForFences(
 		1, &fence_render, true, std::numeric_limits<uint64_t>::max());
 	assert(
 		res_fencewait == ::vk::Result::eSuccess ||
 		res_fencewait == ::vk::Result::eTimeout);
 
-	const auto res_fencereset = device.resetFences(1, &fence_render);
+	[[maybe_unused]] const auto res_fencereset = device.resetFences(1, &fence_render);
 	assert(res_fencereset != ::vk::Result::eErrorOutOfDeviceMemory);
 
 	const auto res_acq = device.acquireNextImageKHR(
@@ -305,48 +312,158 @@ bool context::start_render() noexcept
 
 	img_idx = res_acq.value;
 
-	return res_acq.result == ::vk::Result::eErrorOutOfDateKHR;
+	return res_acq.result != ::vk::Result::eErrorOutOfDateKHR;
 }
 
-bool context::finish_render() noexcept
+void context::start_render_record() noexcept
 {
-	static constexpr ::vk::PipelineStageFlags RENDER_WAIT_STAGES[2] = {
+	// Begin recording rendering command buffer ////////////////////////////////
+
+	{
+		cmdbufs_gfx[img_idx].reset(::vk::CommandBufferResetFlags());
+
+		cmdbufs_gfx[img_idx].begin(::vk::CommandBufferBeginInfo(
+			::vk::CommandBufferUsageFlagBits::eOneTimeSubmit, nullptr));
+
+		const ::vk::RenderPassBeginInfo pass_info(
+			render_pass, framebufs[img_idx], ::vk::Rect2D({}, extent), CLEAR_VAL);
+
+		cmdbufs_gfx[img_idx].beginRenderPass(pass_info, ::vk::SubpassContents::eInline);
+
+		cmdbufs_gfx[img_idx].pushConstants<pushconst>(
+			ppl_render.layout, ::vk::ShaderStageFlagBits::eFragment, 0,
+			std::array { pushconst { .viewport_size = { extent.width, extent.height },
+									 .tile_nums = tile_count,
+									 .debugview_index = 0 } });
+
+		cmdbufs_gfx[img_idx].bindPipeline(
+			::vk::PipelineBindPoint::eGraphics, ppl_render.handle);
+
+		cmdbufs_gfx[img_idx].bindDescriptorSets(
+			::vk::PipelineBindPoint::eGraphics, ppl_render.layout, 0,
+			std::array { descset_obj, descset_cam, descset_lightcull, descset_inter },
+			std::array<uint32_t, 0>());
+	}
+
+	// Begin recording depth pre-pass command buffer ///////////////////////////
+
+	{
+		cmdbuf_prepass.reset(::vk::CommandBufferResetFlags());
+
+		cmdbuf_prepass.begin(::vk::CommandBufferBeginInfo(
+			::vk::CommandBufferUsageFlagBits::eOneTimeSubmit, nullptr));
+
+		static const ::vk::ClearValue
+		DEPTH_CLEAR_VAL(::vk::ClearDepthStencilValue(1.0f, 0.0f));
+
+		const ::vk::RenderPassBeginInfo pass_info(
+			depth_prepass, prepass_framebuffer, ::vk::Rect2D({}, extent),
+			DEPTH_CLEAR_VAL);
+
+		cmdbuf_prepass.beginRenderPass(pass_info, ::vk::SubpassContents::eInline);
+
+		cmdbuf_prepass.bindPipeline(::vk::PipelineBindPoint::eGraphics,
+		ppl_depth.handle);
+
+		cmdbuf_prepass.bindDescriptorSets(
+			::vk::PipelineBindPoint::eGraphics, ppl_depth.layout, 0,
+			{ descset_obj, descset_cam }, {});
+	}
+}
+
+void context::record_draw(const model& model) noexcept
+{
+	for (const auto& mesh : model.meshes)
+	{
+		// Record rendering commands ///////////////////////////////////////////
+
+		cmdbufs_gfx[img_idx].bindVertexBuffers(0, mesh.verts.buffer, { 0 });
+		cmdbufs_gfx[img_idx].bindIndexBuffer(mesh.indices.buffer, 0, ::vk::IndexType::eUint32);
+		cmdbufs_gfx[img_idx].drawIndexed(mesh.index_count, 1, 0, 0, 0);
+
+		// Record depth-prepass commands ///////////////////////////////////////
+
+		cmdbuf_prepass.bindVertexBuffers(0, mesh.verts.buffer, { 0 });
+		cmdbuf_prepass.bindIndexBuffer(mesh.indices.buffer, 0, ::vk::IndexType::eUint32);
+		cmdbuf_prepass.drawIndexed(mesh.index_count, 1, 0, 0, 0);
+	}
+}
+
+void context::bind_material(const material& mat) noexcept
+{
+	cmdbufs_gfx[img_idx].bindDescriptorSets(
+		::vk::PipelineBindPoint::eGraphics, ppl_render.layout, 4, mat.descset, {});
+}
+
+void context::end_render_record() noexcept
+{
+	cmdbufs_gfx[img_idx].endRenderPass();
+	cmdbufs_gfx[img_idx].end();
+	cmdbuf_prepass.endRenderPass();
+	cmdbuf_prepass.end();
+}
+
+const ::vk::Semaphore& context::submit_prepass(
+	const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas) noexcept
+{
+	assert(wait_semas.empty());
+
+	const ::vk::SubmitInfo prepass_info(wait_semas, {}, cmdbuf_prepass, sema_prepassdone);
+	[[maybe_unused]] const auto res_prepass = q_gfx.submit(1, &prepass_info, nullptr);
+
+	assert(res_prepass == ::vk::Result::eSuccess);
+
+	return sema_prepassdone;
+}
+
+const ::vk::Semaphore& context::compute_lightcull(
+	const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas) noexcept
+{
+	static constexpr std::array<::vk::PipelineStageFlags, 1> WAITSTAGES_LIGHTCULL = {
+		::vk::PipelineStageFlagBits::eComputeShader
+	};
+
+	const ::vk::SubmitInfo lightcull_info(
+		wait_semas, WAITSTAGES_LIGHTCULL, cmdbuf_lightcull, sema_lightculldone);
+	[[maybe_unused]] const auto res_lightcull =
+		q_comp.submit(1, &lightcull_info, nullptr);
+
+	assert(res_lightcull == ::vk::Result::eSuccess);
+
+	return sema_lightculldone;
+}
+
+const ::vk::Semaphore& context::submit_geometry(
+	const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas) noexcept
+{
+	static constexpr std::array<::vk::PipelineStageFlags, 2> WAITSTAGES_RENDER = {
 		::vk::PipelineStageFlagBits::eColorAttachmentOutput,
 		::vk::PipelineStageFlagBits::eFragmentShader
 	};
 
-	bool ret = true;
+	std::vector ws = { sema_imgavail };
 
-	const ::vk::SubmitInfo prepass_info(
-		0, nullptr, RENDER_WAIT_STAGES, 1, &cmdbuf_prepass, 1, &sema_prepassdone);
-	const auto res_prepass = q_gfx.submit(1, &prepass_info, nullptr);
+	for (const auto& sema : wait_semas) ws.emplace_back(sema);
 
-	assert(res_prepass == ::vk::Result::eSuccess);
-
-	// Light culling compute ///////////////////////////////////////////////////
-
-	static constexpr ::vk::PipelineStageFlags LIGHTCULL_WAIT_STAGE =
-		::vk::PipelineStageFlagBits::eComputeShader;
-
-	const ::vk::SubmitInfo lightcull_info(
-		1, &sema_prepassdone, &LIGHTCULL_WAIT_STAGE, 1, &cmdbuf_lightcull, 1,
-		&sema_lightculldone);
-	const auto res_lightcull = q_comp.submit(1, &lightcull_info, nullptr);
-
-	assert(res_lightcull == ::vk::Result::eSuccess);
-
-	// Geometry rendering //////////////////////////////////////////////////////
-
-	const std::array wait_semas = { sema_imgavail, sema_lightculldone };
+	assert(ws.size() == WAITSTAGES_RENDER.size());
 
 	const ::vk::SubmitInfo render_info(
-		2, wait_semas.data(), RENDER_WAIT_STAGES, 1, &cmdbufs_gfx[img_idx], 1,
-		&sema_renderdone);
-	const auto res_render = q_gfx.submit(1, &render_info, {});
+		ws, WAITSTAGES_RENDER, cmdbufs_gfx[img_idx], sema_renderdone);
+	[[maybe_unused]] const auto res_render = q_gfx.submit(1, &render_info, {});
 
 	assert(res_render == ::vk::Result::eSuccess);
 
-	// Imgui rendering /////////////////////////////////////////////////////////
+	return sema_renderdone;
+}
+
+const ::vk::Semaphore& context::render_imgui(
+	const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas) noexcept
+{
+	static constexpr std::array<::vk::PipelineStageFlags, 1> WAITSTAGES_IMGUI = {
+		::vk::PipelineStageFlagBits::eTopOfPipe
+	};
+
+	assert(wait_semas.size() == WAITSTAGES_IMGUI.size());
 
 	cmdbuf_imgui.reset(::vk::CommandBufferResetFlags());
 	cmdbuf_imgui.begin(::vk::CommandBufferBeginInfo(
@@ -360,15 +477,22 @@ bool context::finish_render() noexcept
 	cmdbuf_imgui.end();
 
 	const ::vk::SubmitInfo imgui_info(
-		1, &sema_renderdone, RENDER_WAIT_STAGES, 1, &cmdbuf_imgui, 1, &sema_imgui);
-	const auto res_imgui = q_gfx.submit(1, &imgui_info, fence_render);
+		wait_semas, WAITSTAGES_IMGUI, cmdbuf_imgui, sema_imgui);
+	[[maybe_unused]] const auto res_imgui = q_gfx.submit(1, &imgui_info, fence_render);
 
 	assert(res_imgui == ::vk::Result::eSuccess);
+
+	return sema_imgui;
+}
+
+bool context::present_frame(const ::vk::Semaphore& wait_sema)
+{
+	bool ret = true;
 
 	try
 	{
 		const ::vk::Result res =
-			q_pres.presentKHR(::vk::PresentInfoKHR(sema_imgui, swapchain, img_idx));
+			q_pres.presentKHR(::vk::PresentInfoKHR(wait_sema, swapchain, img_idx));
 
 		if (res == ::vk::Result::eSuboptimalKHR) ret = false;
 	}
@@ -400,6 +524,61 @@ void context::rebuild_swapchain(SDL_Window* const window)
 		reinterpret_cast<const uint32_t*>(code.data())));
 
 	if (!debug_name.empty()) set_debug_name(ret, debug_name);
+
+	return ret;
+}
+
+material context::create_material(
+	const std::filesystem::path& albedo, const std::filesystem::path& normal,
+	const std::string& debug_name
+) const
+{
+	const ::vk::DescriptorSetAllocateInfo alloc_info(descpool, dsl_mat);
+
+	auto ret = mxn::vk::material {
+		.info { *this, fmt::format("MXN: UBO, Material Info, {}", debug_name) },
+		.descset = device.allocateDescriptorSets(alloc_info)[0],
+		.albedo = vma_image::from_file(*this, albedo),
+		.normal = vma_image::from_file(*this, normal)
+	};
+
+	ret.info.data = {
+		.has_albedo = ret.albedo ? 1 : 0,
+		.has_normal = ret.normal ? 1 : 0
+	};
+
+	std::vector<::vk::WriteDescriptorSet> descwrites = {};
+
+	const ::vk::DescriptorBufferInfo dbi(ret.info.get_buffer(), 0, ret.info.data_size);
+
+	descwrites.emplace_back(
+		ret.descset, 0, 0, ::vk::DescriptorType::eUniformBuffer,
+		NO_DESCIMG_INFO, dbi, NO_BUFVIEWS);
+
+	const ::vk::DescriptorImageInfo dii_albedo(texture_sampler, ret.albedo.view,
+		::vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	if (ret.info.data.has_albedo)
+	{
+		descwrites.emplace_back(
+			ret.descset, 1, 0, ::vk::DescriptorType::eCombinedImageSampler,
+			dii_albedo, NO_DESCBUF_INFO, NO_BUFVIEWS);
+	}
+
+	const ::vk::DescriptorImageInfo dii_norm(texture_sampler, ret.normal.view,
+		::vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	if (ret.info.data.has_normal)
+	{
+		descwrites.emplace_back(
+			ret.descset, 2, 0, ::vk::DescriptorType::eCombinedImageSampler,
+			dii_norm, NO_DESCBUF_INFO, NO_BUFVIEWS);
+	}
+
+	device.updateDescriptorSets(descwrites, std::array<::vk::CopyDescriptorSet, 0>());
+
+	if (!debug_name.empty())
+		set_debug_name(ret.descset, fmt::format("MXN: Desc. Set, {}", debug_name));
 
 	return ret;
 }
@@ -474,6 +653,14 @@ void context::record_image_layout_change(
 		dst = ::vk::AccessFlagBits::eDepthStencilAttachmentRead |
 			  ::vk::AccessFlagBits::eDepthStencilAttachmentWrite;
 	}
+	else if
+	(
+		from == ::vk::ImageLayout::eTransferDstOptimal &&
+		to == ::vk::ImageLayout::eShaderReadOnlyOptimal)
+	{
+		src = ::vk::AccessFlagBits::eTransferWrite;
+		dst = ::vk::AccessFlagBits::eShaderRead;
+	}
 	else
 	{
 		assert(false && "Unsupported image layout from/to combination.");
@@ -494,10 +681,18 @@ void context::record_image_layout_change(
 	cmdbuf.pipelineBarrier(
 		// Happens before barrier
 		::vk::PipelineStageFlagBits::eTopOfPipe |
-			::vk::PipelineStageFlagBits::eEarlyFragmentTests,
+			::vk::PipelineStageFlagBits::eEarlyFragmentTests |
+			::vk::PipelineStageFlagBits::eHost |
+			::vk::PipelineStageFlagBits::eVertexShader |
+			::vk::PipelineStageFlagBits::eFragmentShader |
+			::vk::PipelineStageFlagBits::eTransfer,
 		// Waits for barrier
 		::vk::PipelineStageFlagBits::eTopOfPipe |
-			::vk::PipelineStageFlagBits::eEarlyFragmentTests,
+			::vk::PipelineStageFlagBits::eEarlyFragmentTests |
+			::vk::PipelineStageFlagBits::eHost |
+			::vk::PipelineStageFlagBits::eVertexShader |
+			::vk::PipelineStageFlagBits::eFragmentShader |
+			::vk::PipelineStageFlagBits::eTransfer,
 		::vk::DependencyFlags(), {}, {}, barrier);
 }
 
@@ -1031,8 +1226,7 @@ std::pair<pipeline, pipeline> context::create_graphics_pipelines() const
 			::vk::PipelineColorBlendStateCreateFlags(), false, ::vk::LogicOp::eCopy, cba,
 			{ 0.0f, 0.0f, 0.0f, 0.0f });
 
-		const std::array dynstates = { ::vk::DynamicState::eViewport,
-									   ::vk::DynamicState::eLineWidth };
+		const std::array<::vk::DynamicState, 0> dynstates = {};
 
 		// Parameters which can be freely changed without pipeline rebuild
 		const ::vk::PipelineDynamicStateCreateInfo dynstate(
@@ -1129,7 +1323,7 @@ vma_image context::create_depth_image() const
 			::vk::ImageViewCreateFlags(), {}, ::vk::ImageViewType::e2D, depth_format(),
 			::vk::ComponentMapping(),
 			::vk::ImageSubresourceRange(::vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1)),
-		VMA_ALLOC_CREATEINFO_GENERAL, "Depth");
+		VMA_ALLOC_CREATEINFO_GENERAL, "MXN: Image, Depth");
 
 	auto cmdbuf = begin_onetime_buffer();
 	record_image_layout_change(
@@ -1240,12 +1434,10 @@ void context::destroy_swapchain()
 		::vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, 200, pool_sizes));
 }
 
-std::array<::vk::DescriptorSet, 5> context::create_descsets() const
+std::array<::vk::DescriptorSet, 4> context::create_descsets() const
 {
-	std::array<::vk::DescriptorSet, 5> ret;
-	const std::array<::vk::DescriptorSetLayout, 5> dsls = { dsl_obj, dsl_cam,
-															dsl_lightcull, dsl_inter,
-															dsl_mat };
+	std::array<::vk::DescriptorSet, 4> ret;
+	const std::array dsls = { dsl_obj, dsl_cam, dsl_lightcull, dsl_inter, dsl_mat };
 	const ::vk::DescriptorSetAllocateInfo alloc_info(descpool, dsls);
 	const auto res = device.allocateDescriptorSets(&alloc_info, ret.data());
 
@@ -1259,31 +1451,28 @@ std::array<::vk::DescriptorSet, 5> context::create_descsets() const
 	set_debug_name(ret[1], "MXN: Desc. Set, Camera");
 	set_debug_name(ret[2], "MXN: Desc. Set, Light Culling");
 	set_debug_name(ret[3], "MXN: Desc. Set, Intermediate");
-	set_debug_name(ret[4], "MXN: Desc. Set, Material");
 
 	return ret;
 }
 
 void context::update_descset_obj() const
 {
-	const std::array<::vk::DescriptorImageInfo, 0> diis = {};
 	const ::vk::DescriptorBufferInfo dbi(ubo_obj.get_buffer(), 0, ubo_obj.data_size);
-	const std::array<::vk::BufferView, 0> bvs = {};
 
 	const ::vk::WriteDescriptorSet descwrite(
-		descset_obj, 0, 0, ::vk::DescriptorType::eUniformBuffer, diis, dbi, bvs);
+		descset_obj, 0, 0, ::vk::DescriptorType::eUniformBuffer, NO_DESCIMG_INFO, dbi,
+		NO_BUFVIEWS);
 
 	device.updateDescriptorSets(descwrite, {});
 }
 
 void context::update_descset_cam() const
 {
-	const std::array<::vk::DescriptorImageInfo, 0> diis = {};
 	const ::vk::DescriptorBufferInfo dbi(ubo_cam.get_buffer(), 0, ubo_cam.data_size);
-	const std::array<::vk::BufferView, 0> bvs = {};
 
 	const ::vk::WriteDescriptorSet descwrite(
-		descset_cam, 0, 0, ::vk::DescriptorType::eUniformBuffer, diis, dbi, bvs);
+		descset_cam, 0, 0, ::vk::DescriptorType::eUniformBuffer, NO_DESCIMG_INFO, dbi,
+		NO_BUFVIEWS);
 
 	device.updateDescriptorSets(descwrite, {});
 }
@@ -1293,23 +1482,10 @@ void context::update_descset_inter() const
 	const ::vk::DescriptorImageInfo dii(
 		texture_sampler, depth_image.view,
 		::vk::ImageLayout::eDepthStencilReadOnlyOptimal);
-	const std::array<::vk::DescriptorBufferInfo, 0> dbis = {};
-	const std::array<::vk::BufferView, 0> bvs = {};
 
 	const ::vk::WriteDescriptorSet descwrites(
-		descset_inter, 0, 0, ::vk::DescriptorType::eCombinedImageSampler, dii, dbis, bvs);
-
-	device.updateDescriptorSets(descwrites, {});
-}
-
-void context::update_descset_mat() const
-{
-	const std::array<::vk::DescriptorImageInfo, 0> diis = {};
-	const ::vk::DescriptorBufferInfo dbi(ubo_mat.get_buffer(), 0, ubo_mat.data_size);
-	const std::array<::vk::BufferView, 0> bvs = {};
-
-	const ::vk::WriteDescriptorSet descwrites(
-		descset_mat, 0, 0, ::vk::DescriptorType::eUniformBuffer, diis, dbi, bvs);
+		descset_inter, 0, 0, ::vk::DescriptorType::eCombinedImageSampler, dii,
+		NO_DESCBUF_INFO, NO_BUFVIEWS);
 
 	device.updateDescriptorSets(descwrites, {});
 }
@@ -1350,47 +1526,6 @@ vma_buffer context::create_and_write_lightvis_buffer() const
 }
 
 std::tuple<std::vector<::vk::CommandBuffer>, ::vk::CommandBuffer, ::vk::CommandBuffer>
-	context::create_commandbuffers() const
-{
-	std::tuple<std::vector<::vk::CommandBuffer>, ::vk::CommandBuffer, ::vk::CommandBuffer>
-		ret;
-
-	auto& ret_gfx = std::get<0>(ret);
-	auto& ret_lightcull = std::get<1>(ret);
-	auto& ret_prepass = std::get<2>(ret);
-
-	// Graphics ////////////////////////////////////////////////////////////////
-
-	{
-		const ::vk::CommandBufferAllocateInfo alloc_info(
-			cmdpool_gfx, ::vk::CommandBufferLevel::ePrimary,
-			static_cast<uint32_t>(framebufs.size()));
-
-		ret_gfx = device.allocateCommandBuffers(alloc_info);
-	}
-
-	// Light culling ///////////////////////////////////////////////////////////
-
-	{
-		const ::vk::CommandBufferAllocateInfo alloc_info(
-			cmdpool_comp, ::vk::CommandBufferLevel::ePrimary, 1);
-
-		ret_lightcull = device.allocateCommandBuffers(alloc_info)[0];
-	}
-
-	// Depth pre-pass //////////////////////////////////////////////////////////
-
-	{
-		const ::vk::CommandBufferAllocateInfo alloc_info(
-			cmdpool_gfx, ::vk::CommandBufferLevel::ePrimary, 1);
-
-		ret_prepass = device.allocateCommandBuffers(alloc_info)[0];
-	}
-
-	return ret;
-}
-
-std::tuple<std::vector<::vk::CommandBuffer>, ::vk::CommandBuffer, ::vk::CommandBuffer>
 	context::create_and_record_commandbuffers() const
 {
 	std::tuple<std::vector<::vk::CommandBuffer>, ::vk::CommandBuffer, ::vk::CommandBuffer>
@@ -1410,36 +1545,7 @@ std::tuple<std::vector<::vk::CommandBuffer>, ::vk::CommandBuffer, ::vk::CommandB
 		ret_gfx = device.allocateCommandBuffers(alloc_info);
 
 		for (size_t i = 0; i < ret_gfx.size(); i++)
-		{
 			set_debug_name(ret_gfx[i], fmt::format("MXN: Cmd. Buffer, Render {}", i));
-
-			ret_gfx[i].begin(::vk::CommandBufferBeginInfo(
-				::vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr));
-
-			const ::vk::RenderPassBeginInfo pass_info(
-				render_pass, framebufs[i], ::vk::Rect2D({}, extent), CLEAR_VAL);
-
-			ret_gfx[i].beginRenderPass(pass_info, ::vk::SubpassContents::eInline);
-
-			ret_gfx[i].pushConstants<pushconst>(
-				ppl_render.layout, ::vk::ShaderStageFlagBits::eFragment, 0,
-				std::array { pushconst { .viewport_size = { extent.width, extent.height },
-										 .tile_nums = tile_count,
-										 .debugview_index = 0 } });
-
-			ret_gfx[i].bindPipeline(
-				::vk::PipelineBindPoint::eGraphics, ppl_render.handle);
-
-			ret_gfx[i].bindDescriptorSets(
-				::vk::PipelineBindPoint::eGraphics, ppl_render.layout, 0,
-				std::array { descset_obj, descset_cam, descset_lightcull, descset_inter },
-				std::array<uint32_t, 0>());
-
-			// TODO: Object buffer binding/drawing goes here
-
-			ret_gfx[i].endRenderPass();
-			ret_gfx[i].end();
-		}
 	}
 
 	// Light culling ///////////////////////////////////////////////////////////
@@ -1492,23 +1598,6 @@ std::tuple<std::vector<::vk::CommandBuffer>, ::vk::CommandBuffer, ::vk::CommandB
 
 		ret_prepass = device.allocateCommandBuffers(alloc_info)[0];
 		set_debug_name(ret_prepass, "MXN: Cmd. Buffer, Depth Pre-pass");
-
-		static const ::vk::ClearValue DEPTH_CLEAR_VAL(
-			::vk::ClearDepthStencilValue(1.0f, 0.0f));
-
-		ret_prepass.begin(::vk::CommandBufferBeginInfo(
-			::vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr));
-
-		const ::vk::RenderPassBeginInfo pass_info(
-			depth_prepass, prepass_framebuffer, ::vk::Rect2D({}, extent),
-			DEPTH_CLEAR_VAL);
-
-		ret_prepass.beginRenderPass(pass_info, ::vk::SubpassContents::eInline);
-
-		// TODO: Object buffer binding/drawing goes here
-
-		ret_prepass.endRenderPass();
-		ret_prepass.end();
 	}
 
 	return ret;

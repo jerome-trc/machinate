@@ -23,6 +23,9 @@ typedef VmaAllocator_T* VmaAllocator;
 
 namespace mxn::vk
 {
+	struct model;
+	struct material;
+
 	class context final
 	{
 	public:
@@ -45,30 +48,61 @@ namespace mxn::vk
 		/**
 		 * @brief Start a new frame.
 		 *
-		 * Calls `ImGui::Render()`, resets the context's fences and command buffer,
-		 * acquires the next swapchain image, restarts command buffer recording, and
-		 * starts the render pass.
+		 * Calls `ImGui::Render()`, resets the context's fence,
+		 * and acquires the next swapchain image.
 		 *
 		 * @returns `false` if the context's swapchain requires re-creation.
 		 */
-		bool start_render() noexcept;
+		[[nodiscard]] bool start_render() noexcept;
+
+		void start_render_record() noexcept;
+		void bind_material(const mxn::vk::material&) noexcept;
+		void record_draw(const mxn::vk::model&) noexcept;
+		void end_render_record() noexcept;
+		
+		[[nodiscard]] const ::vk::Semaphore& submit_prepass(
+			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas
+		) noexcept;
 
 		/**
-		 * @brief Finalise rendering a frame.
-		 *
-		 * Calls `ImGui_ImplVulkan_RenderDrawData()`, ends a render pass and
-		 * command buffer recording, submits to the graphics queue, and presents
-		 * the new frame.
-		 *
+		 * @brief Invokes the light culling computation command buffer.
+		 * @returns The semaphore which will signal when computation is complete.
+		 */
+		[[nodiscard]] const ::vk::Semaphore& compute_lightcull(
+			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas
+		) noexcept;
+
+		[[nodiscard]] const ::vk::Semaphore& submit_geometry(
+			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas
+		) noexcept;
+
+		/**
+		 * @brief Records and submits the commands of `ImGui_ImplVulkan_RenderDrawData()`.
+		 * @note Should only be called after `start_frame()` and generally
+		 * before `present_frame()`.
+		 * @returns The semaphore which will signal when rendering is complete.
+		 */
+		[[nodiscard]] const ::vk::Semaphore& render_imgui(
+			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas
+		) noexcept;
+
+		/**
+		 * @brief Submits the current swapchain frame to the present queue.
+		 * @param wait_sema The semaphore on which presentation waits.
 		 * @returns `false` if the context's swapchain requires re-creation.
 		 */
-		bool finish_render() noexcept;
+		[[nodiscard]] bool present_frame(const ::vk::Semaphore& wait_sema);
 
 		/// @brief Rebuild the context's swapchain, framebuffers, and command buffer.
 		void rebuild_swapchain(SDL_Window* const);
 
 		[[nodiscard]] ::vk::ShaderModule create_shader(
 			const std::filesystem::path&, const std::string& debug_name = "") const;
+
+		[[nodiscard]] material create_material(
+			const std::filesystem::path& albedo = "", const std::filesystem::path& normal = "",
+			const std::string& debug_name = ""
+		) const;
 
 		[[nodiscard]] ::vk::CommandBuffer begin_onetime_buffer() const;
 		/// @brief Ends, submits, and frees the given buffer.
@@ -115,19 +149,17 @@ namespace mxn::vk
 
 		ubo<glm::mat4> ubo_obj;
 		ubo<camera> ubo_cam;
-		ubo<material_info> ubo_mat;
 		ubo<std::vector<point_light>, POINTLIGHT_BUFSIZE> ubo_lights;
 
-		pipeline ppl_render;
-		pipeline ppl_depth, ppl_comp;
+		pipeline ppl_render, ppl_depth, ppl_comp;
 
 		vma_image depth_image;
 		::vk::Sampler texture_sampler;
 		::vk::DescriptorPool descpool;
-		::vk::DescriptorSet descset_obj, descset_cam, descset_lightcull, descset_inter,
-			descset_mat;
+		::vk::DescriptorSet descset_obj, descset_cam, descset_lightcull, descset_inter;
 
-		glm::uvec2 tile_count; /// `x` is per row, `y` is per column.
+		/// `x` is per row, `y` is per column.
+		glm::uvec2 tile_count;
 		vma_buffer lightvis;
 
 		::vk::DescriptorPool descpool_imgui;
@@ -175,24 +207,20 @@ namespace mxn::vk
 		[[nodiscard]] pipeline create_compute_pipeline() const;
 		[[nodiscard]] vma_image create_depth_image() const;
 		[[nodiscard]] ::vk::DescriptorPool create_descpool() const;
-		/// @brief Returns object, camera, light culling, intermediate, and
-		/// material descriptor sets (in that order; performs no writing).
-		[[nodiscard]] std::array<::vk::DescriptorSet, 5> create_descsets() const;
+		/// @brief Returns object, camera, light culling, and intermediate
+		/// descriptor sets (in that order; performs no writing).
+		[[nodiscard]] std::array<::vk::DescriptorSet, 4> create_descsets() const;
 
 		void update_descset_obj() const;
 		void update_descset_cam() const;
 		void update_descset_inter() const;
-		void update_descset_mat() const;
 
 		[[nodiscard]] glm::uvec2 update_lightcull_tilecounts() const;
 		[[nodiscard]] vma_buffer create_and_write_lightvis_buffer() const;
-		/// @brief Returns command buffers for graphics, lightculling,
-		/// and the depth pre-pass, (in that order; performs no recording).
-		[[nodiscard]] std::tuple<
-			std::vector<::vk::CommandBuffer>, ::vk::CommandBuffer, ::vk::CommandBuffer>
-			create_commandbuffers() const;
+
 		/// @brief Returns pre-recorded command buffers for graphics,
 		/// lightculling, and the depth pre-pass, (in that order).
+		/// @note Only the light cull command buffer is pre-recorded.
 		[[nodiscard]] std::tuple<
 			std::vector<::vk::CommandBuffer>, ::vk::CommandBuffer, ::vk::CommandBuffer>
 			create_and_record_commandbuffers() const;

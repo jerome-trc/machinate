@@ -6,6 +6,8 @@
 #pragma once
 
 #include "buffer.hpp"
+#include "image.hpp"
+#include "ubo.hpp"
 
 #include <assimp/Importer.hpp>
 #include <filesystem>
@@ -15,6 +17,11 @@
 #include <thread>
 #include <vector>
 #include <vulkan/vulkan.hpp>
+
+namespace mxn
+{
+	struct world_chunk;
+}
 
 namespace mxn::vk
 {
@@ -27,24 +34,42 @@ namespace mxn::vk
 		glm::vec3 pos, colour;
 		glm::vec2 uv;
 		glm::vec3 normal, binormal;
+
+		constexpr bool operator==(const vertex& other) const
+		{
+			return pos == other.pos && colour == other.colour && uv == other.uv &&
+				   normal == other.normal && binormal == other.binormal;
+		}
 	};
 
-	struct bufslice final
+	void fill_vertex_buffer(
+		const context&, vma_buffer&, const std::vector<vertex>&);
+	void fill_index_buffer(
+		const context&, vma_buffer&, const std::vector<uint32_t>&);
+
+	struct material_info final
 	{
-		const ::vk::Buffer buffer; /// Non-owning.
-		const ::vk::DeviceSize offset = 0, size = 0;
+		int has_albedo = 0, has_normal = 0;
+	};
+
+	struct material final
+	{
+		ubo<material_info> info;
+		::vk::DescriptorSet descset;
+		vma_image albedo, normal;
 	};
 
 	struct mesh final
 	{
-		bufslice verts, indices;
-		size_t index_count;
+		vma_buffer verts, indices;
+		uint32_t index_count;
 	};
 
 	struct model final
 	{
-		vma_buffer buffer;
 		std::vector<mesh> meshes;
+
+		static model from_world_chunk(const context&, const world_chunk&);
 	};
 
 	class model_importer final
