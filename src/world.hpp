@@ -11,16 +11,17 @@ namespace mxn
 		/// Despite the name, all dimensions are of this magnitude.
 		static constexpr size_t WIDTH = 64;
 		
-		using arr_t = std::array<float, WIDTH * WIDTH * WIDTH>;
-
-		/// World space distance from edge to edge.
+		/// World space distance from edge to opposing edge.
 		static constexpr float CELL_SIZE = 0.5f;
 
-		/// World space distance from edge to edge.
-		static constexpr float CHUNK_SIZE = CELL_SIZE  * (WIDTH - 1);
+		/// World space distance from edge to opposing edge.
+		static constexpr float WORLD_SIZE = CELL_SIZE  * (WIDTH - 1);
 
-		/// The centre of this chunk in world space.
-		glm::vec3 position = {};
+		using arr_t = std::array<float, WIDTH * WIDTH * WIDTH>;
+
+		/// The position of this chunk on the "grid" of chunks.
+		/// Considered to be at the "centre" of the chunk.
+		glm::ivec3 position = {};
 
 		arr_t values = {};
 
@@ -34,5 +35,21 @@ namespace mxn
 		{
 			return values[index(x, y, z)];
 		}
+	};
+
+	struct heightmap final
+	{
+		/// Despite the name, all dimensions are of this magnitude.
+		static constexpr size_t WIDTH = 32;
+
+		/// World space distance from edge to edge.
+		static constexpr float WORLD_SIZE = static_cast<float>(WIDTH);
+
+		using arr_t = std::array<std::array<uint16_t, WIDTH>, WIDTH>;
+
+		/// The position of this chunk on the "grid" of chunks.
+		glm::ivec2 position = {};
+
+		arr_t heights = {};
 	};
 } // namespace mxn

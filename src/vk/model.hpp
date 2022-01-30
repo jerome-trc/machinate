@@ -20,6 +20,7 @@
 
 namespace mxn
 {
+	struct heightmap;
 	struct world_chunk;
 }
 
@@ -57,6 +58,8 @@ namespace mxn::vk
 		ubo<material_info> info;
 		::vk::DescriptorSet descset;
 		vma_image albedo, normal;
+
+		void destroy(const context&);
 	};
 
 	struct mesh final
@@ -69,7 +72,10 @@ namespace mxn::vk
 	{
 		std::vector<mesh> meshes;
 
+		static model from_heightmap(const context&, const heightmap&);
 		static model from_world_chunk(const context&, const world_chunk&);
+
+		void destroy(const context&);
 	};
 
 	class model_importer final

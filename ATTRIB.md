@@ -61,3 +61,4 @@ Note that this is a living document. Completeness is not guaranteed. If no autho
 ## Code
 
 - Machinate's Vulkan renderer is based on the work of Ruoyu "WindyDarian" Fan and Xueyin Wan, and is used under the [MIT License](https://github.com/WindyDarian/Vulkan-Forward-Plus-Renderer/blob/master/LICENSE).
+- Machinate's 3D terrain implementation is based on [marching cubes code by Matthew Fisher](https://graphics.stanford.edu/~mdfisher/MarchingCubes.html).

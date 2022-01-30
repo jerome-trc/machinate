@@ -13,7 +13,6 @@
 #include <Tracy.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
-#include <unordered_map>
 #include <xxhash.h>
 
 using namespace mxn::vk;
@@ -58,14 +57,136 @@ void mxn::vk::fill_index_buffer(
 	vmaUnmapMemory(ctxt.vma, buf.allocation);
 }
 
+void material::destroy(const context& ctxt)
+{
+	info.destroy(ctxt);
+	// TODO: Free descriptor set
+
+	if (albedo) albedo.destroy(ctxt);
+	if (normal) normal.destroy(ctxt);
+}
+
+model model::from_heightmap(const context& ctxt, const heightmap& hmap)
+{
+	mesh_pair mpair = {};
+	auto& verts = mpair.first;
+	auto& indices = mpair.second;
+
+	static constexpr float HSCALE = .00001f;
+	const glm::vec2 pos_offs = { heightmap::WORLD_SIZE * hmap.position.x,
+								 heightmap::WORLD_SIZE * hmap.position.y };
+
+	verts.reserve(heightmap::WIDTH * heightmap::WIDTH);
+
+	for (size_t y = 0; y < heightmap::WIDTH; y++)
+	{
+		for (size_t x = 0; x < heightmap::WIDTH; x++)
+		{
+			verts.push_back({ .pos = { static_cast<float>(x + pos_offs.x),
+									   static_cast<float>(y + pos_offs.y),
+									   static_cast<float>(hmap.heights[y][x]) * HSCALE },
+							  .colour = { 1.0f, 1.0f, 1.0f },
+							  .uv = { /* TODO */ },
+							  // Calculated post-hoc
+							  .normal = {},
+							  .binormal = {} });
+		}
+	}
+
+	static constexpr size_t WM1 = heightmap::WIDTH - 1;
+
+	indices.resize(WM1 * WM1 * 6);
+
+	for (uint32_t ti = 0, vi = 0, z = 0; z < WM1; z++, vi++)
+	{
+		for (uint32_t x = 0; x < WM1; x++, ti += 6, vi++)
+		{
+			indices[ti] = vi;
+			indices[ti + 3] = indices[ti + 2] = vi + 1;
+			indices[ti + 4] = indices[ti + 1] = vi + WM1 + 1;
+			indices[ti + 5] = vi + WM1 + 2;
+		}
+	}
+
+	// Calculate vertex normals
+	for (size_t e = 0; e < indices.size(); e += 3)
+	{
+		const uint32_t e0 = indices[e], e1 = indices[e + 1], e2 = indices[e + 2];
+
+		const glm::vec3 v1 = verts[e1].pos - verts[e0].pos,
+						v2 = verts[e2].pos - verts[e0].pos;
+
+		const glm::vec3 normal = glm::normalize(glm::cross(v1, v2));
+
+		verts[e0].normal += normal;
+		verts[e1].normal += normal;
+		verts[e2].normal += normal;
+		verts[e0].normal = glm::normalize(verts[e0].normal);
+		verts[e1].normal = glm::normalize(verts[e1].normal);
+		verts[e2].normal = glm::normalize(verts[e2].normal);
+	}
+
+	const size_t vbsz = (verts.size() * sizeof(vertex)),
+				 ibsz = (indices.size() * sizeof(vertex::index_t));
+
+	model ret = { .meshes = {
+					  { .verts = vma_buffer(
+							ctxt,
+							::vk::BufferCreateInfo(
+								::vk::BufferCreateFlags(), vbsz,
+								::vk::BufferUsageFlagBits::eTransferDst |
+									::vk::BufferUsageFlagBits::eVertexBuffer |
+									::vk::BufferUsageFlagBits::eIndexBuffer),
+							VMA_ALLOC_CREATEINFO_GENERAL),
+						.indices = vma_buffer(
+							ctxt,
+							::vk::BufferCreateInfo(
+								::vk::BufferCreateFlags(), ibsz,
+								::vk::BufferUsageFlagBits::eTransferDst |
+									::vk::BufferUsageFlagBits::eVertexBuffer |
+									::vk::BufferUsageFlagBits::eIndexBuffer),
+							VMA_ALLOC_CREATEINFO_GENERAL),
+						.index_count = static_cast<uint32_t>(indices.size()) } } };
+
+	{
+		vma_buffer staging = vma_buffer::staging_preset(ctxt, vbsz);
+		fill_vertex_buffer(ctxt, staging, verts);
+		staging.copy_to(ctxt, ret.meshes.back().verts, { ::vk::BufferCopy(0, 0, vbsz) });
+		staging.destroy(ctxt);
+	}
+
+	{
+		vma_buffer staging = vma_buffer::staging_preset(ctxt, ibsz);
+		fill_index_buffer(ctxt, staging, indices);
+		staging.copy_to(
+			ctxt, ret.meshes.back().indices, { ::vk::BufferCopy(0, 0, ibsz) });
+		staging.destroy(ctxt);
+	}
+
+	ctxt.set_debug_name(
+		ret.meshes[0].verts.buffer,
+		fmt::format("MXN: Buffer (V), Chunk {}, {}", hmap.position.x, hmap.position.y));
+	ctxt.set_debug_name(
+		ret.meshes[0].indices.buffer,
+		fmt::format("MXN: Buffer (I), Chunk {}, {}", hmap.position.x, hmap.position.y));
+
+	return ret;
+}
+
 model model::from_world_chunk(const context& ctxt, const world_chunk& chunk)
 {
-	static constexpr float HALFCHUNK = world_chunk::CHUNK_SIZE * 0.5f;
+	static constexpr float HALFCHUNK = mxn::world_chunk::WORLD_SIZE * 0.5f,
+						   HALFCELL = mxn::world_chunk::CELL_SIZE * 0.5f;
 
 	mesh_pair mpair = {};
 	auto& verts = mpair.first;
 	auto& indices = mpair.second;
-	std::unordered_map<vertex, vertex::index_t> unique_verts = {};
+
+	const glm::vec3 world_pos = {
+		static_cast<float>(chunk.position.x) * mxn::world_chunk::WORLD_SIZE,
+		static_cast<float>(chunk.position.y) * mxn::world_chunk::WORLD_SIZE,
+		static_cast<float>(chunk.position.z) * mxn::world_chunk::WORLD_SIZE
+	};
 
 	for (size_t z = 0; z < world_chunk::WIDTH - 1; z++)
 	{
@@ -73,15 +194,16 @@ model model::from_world_chunk(const context& ctxt, const world_chunk& chunk)
 		{
 			for (size_t x = 0; x < world_chunk::WIDTH - 1; x++)
 			{
-				const glm::vec3 cell_pos(
-					(chunk.position.x - HALFCHUNK) +
-						(world_chunk::CELL_SIZE * static_cast<float>(x)),
-					(chunk.position.y - HALFCHUNK) +
-						(world_chunk::CELL_SIZE * static_cast<float>(y)),
-					(chunk.position.z - HALFCHUNK) +
-						(world_chunk::CELL_SIZE * static_cast<float>(z)));
+				const glm::vec3 cell_pos = {
+					(world_pos.x - HALFCHUNK) +
+						(mxn::world_chunk::CELL_SIZE * static_cast<float>(x)) + HALFCELL,
+					(world_pos.y - HALFCHUNK) +
+						(mxn::world_chunk::CELL_SIZE * static_cast<float>(y)) + HALFCELL,
+					(world_pos.z - HALFCHUNK) +
+						(mxn::world_chunk::CELL_SIZE * static_cast<float>(z)) + HALFCELL
+				};
 
-				auto p = polygonise(
+				const auto p = polygonise(
 					{ chunk.value_at(x, y, z), chunk.value_at(x + 1, y, z),
 					  chunk.value_at(x + 1, y + 1, z), chunk.value_at(x, y + 1, z),
 					  chunk.value_at(x, y, z + 1), chunk.value_at(x + 1, y, z + 1),
@@ -107,9 +229,6 @@ model model::from_world_chunk(const context& ctxt, const world_chunk& chunk)
 								  .normal = {},
 								  .binormal = {} };
 
-					if (unique_verts.count(vx) > 0) continue;
-
-					unique_verts[vx] = static_cast<uint32_t>(verts.size());
 					verts.push_back(vx);
 				}
 			}
@@ -138,24 +257,23 @@ model model::from_world_chunk(const context& ctxt, const world_chunk& chunk)
 				 ibsz = (indices.size() * sizeof(vertex::index_t));
 
 	model ret = { .meshes = {
-		{ .verts = vma_buffer(
-					  ctxt,
-					  ::vk::BufferCreateInfo(
-						  ::vk::BufferCreateFlags(), vbsz,
-						  ::vk::BufferUsageFlagBits::eTransferDst |
-							  ::vk::BufferUsageFlagBits::eVertexBuffer |
-							  ::vk::BufferUsageFlagBits::eIndexBuffer),
-					  VMA_ALLOC_CREATEINFO_GENERAL),
-		  .indices = vma_buffer(
-					  ctxt,
-					  ::vk::BufferCreateInfo(
-						  ::vk::BufferCreateFlags(), ibsz,
-						  ::vk::BufferUsageFlagBits::eTransferDst |
-							  ::vk::BufferUsageFlagBits::eVertexBuffer |
-							  ::vk::BufferUsageFlagBits::eIndexBuffer),
-					  VMA_ALLOC_CREATEINFO_GENERAL),
-		  .index_count = static_cast<uint32_t>(indices.size()) }
-	} };
+					  { .verts = vma_buffer(
+							ctxt,
+							::vk::BufferCreateInfo(
+								::vk::BufferCreateFlags(), vbsz,
+								::vk::BufferUsageFlagBits::eTransferDst |
+									::vk::BufferUsageFlagBits::eVertexBuffer |
+									::vk::BufferUsageFlagBits::eIndexBuffer),
+							VMA_ALLOC_CREATEINFO_GENERAL),
+						.indices = vma_buffer(
+							ctxt,
+							::vk::BufferCreateInfo(
+								::vk::BufferCreateFlags(), ibsz,
+								::vk::BufferUsageFlagBits::eTransferDst |
+									::vk::BufferUsageFlagBits::eVertexBuffer |
+									::vk::BufferUsageFlagBits::eIndexBuffer),
+							VMA_ALLOC_CREATEINFO_GENERAL),
+						.index_count = static_cast<uint32_t>(indices.size()) } } };
 
 	{
 		vma_buffer staging = vma_buffer::staging_preset(ctxt, vbsz);
@@ -167,18 +285,32 @@ model model::from_world_chunk(const context& ctxt, const world_chunk& chunk)
 	{
 		vma_buffer staging = vma_buffer::staging_preset(ctxt, ibsz);
 		fill_index_buffer(ctxt, staging, indices);
-		staging.copy_to(ctxt, ret.meshes.back().indices, { ::vk::BufferCopy(0, 0, ibsz) });
+		staging.copy_to(
+			ctxt, ret.meshes.back().indices, { ::vk::BufferCopy(0, 0, ibsz) });
 		staging.destroy(ctxt);
 	}
 
-	ctxt.set_debug_name(ret.meshes[0].verts.buffer,
-		fmt::format("MXN: Buffer (V), Chunk {}, {}, {}",
-		chunk.position.x, chunk.position.y, chunk.position.z));
-	ctxt.set_debug_name(ret.meshes[0].indices.buffer,
-		fmt::format("MXN: Buffer (I), Chunk {}, {}, {}",
-		chunk.position.x, chunk.position.y, chunk.position.z));
+	ctxt.set_debug_name(
+		ret.meshes[0].verts.buffer,
+		fmt::format(
+			"MXN: Buffer (V), Chunk {}, {}, {}", chunk.position.x, chunk.position.y,
+			chunk.position.z));
+	ctxt.set_debug_name(
+		ret.meshes[0].indices.buffer,
+		fmt::format(
+			"MXN: Buffer (I), Chunk {}, {}, {}", chunk.position.x, chunk.position.y,
+			chunk.position.z));
 
 	return ret;
+}
+
+void model::destroy(const context& ctxt)
+{
+	for (auto& mesh : meshes)
+	{
+		mesh.verts.destroy(ctxt);
+		mesh.indices.destroy(ctxt);
+	}
 }
 
 void model_importer::import_file(const std::filesystem::path& path)
@@ -240,34 +372,36 @@ void model_importer::import_file(const std::filesystem::path& path)
 
 		model.meshes.push_back(
 			mesh { .verts = vma_buffer(
-					  ctxt,
-					  ::vk::BufferCreateInfo(
-						  ::vk::BufferCreateFlags(), vbsz,
-						  ::vk::BufferUsageFlagBits::eTransferDst |
-							  ::vk::BufferUsageFlagBits::eVertexBuffer |
-							  ::vk::BufferUsageFlagBits::eIndexBuffer),
-					  VMA_ALLOC_CREATEINFO_GENERAL),
+					   ctxt,
+					   ::vk::BufferCreateInfo(
+						   ::vk::BufferCreateFlags(), vbsz,
+						   ::vk::BufferUsageFlagBits::eTransferDst |
+							   ::vk::BufferUsageFlagBits::eVertexBuffer |
+							   ::vk::BufferUsageFlagBits::eIndexBuffer),
+					   VMA_ALLOC_CREATEINFO_GENERAL),
 				   .indices = vma_buffer(
-					  ctxt,
-					  ::vk::BufferCreateInfo(
-						  ::vk::BufferCreateFlags(), ibsz,
-						  ::vk::BufferUsageFlagBits::eTransferDst |
-							  ::vk::BufferUsageFlagBits::eVertexBuffer |
-							  ::vk::BufferUsageFlagBits::eIndexBuffer),
-					  VMA_ALLOC_CREATEINFO_GENERAL),
+					   ctxt,
+					   ::vk::BufferCreateInfo(
+						   ::vk::BufferCreateFlags(), ibsz,
+						   ::vk::BufferUsageFlagBits::eTransferDst |
+							   ::vk::BufferUsageFlagBits::eVertexBuffer |
+							   ::vk::BufferUsageFlagBits::eIndexBuffer),
+					   VMA_ALLOC_CREATEINFO_GENERAL),
 				   .index_count = static_cast<uint32_t>(pair.second.size()) });
 
 		{
 			vma_buffer staging = vma_buffer::staging_preset(ctxt, vbsz);
 			fill_vertex_buffer(ctxt, staging, pair.first);
-			staging.copy_to(ctxt, model.meshes.back().verts, { ::vk::BufferCopy(0, 0, vbsz) });
+			staging.copy_to(
+				ctxt, model.meshes.back().verts, { ::vk::BufferCopy(0, 0, vbsz) });
 			staging.destroy(ctxt);
 		}
 
 		{
 			vma_buffer staging = vma_buffer::staging_preset(ctxt, vbsz);
 			fill_index_buffer(ctxt, staging, pair.second);
-			staging.copy_to(ctxt, model.meshes.back().indices, { ::vk::BufferCopy(0, 0, ibsz) });
+			staging.copy_to(
+				ctxt, model.meshes.back().indices, { ::vk::BufferCopy(0, 0, ibsz) });
 			staging.destroy(ctxt);
 		}
 	}
@@ -317,6 +451,10 @@ std::vector<model>&& model_importer::join()
 	thread.join();
 	return std::move(output);
 }
+
+// The following marching cubes implementation is courtesy of Matthew Fisher
+// https://graphics.stanford.edu/~mdfisher/MarchingCubes.html
+// (no license)
 
 static constexpr int MARCHING_CUBES_EDGES[256] = {
 	0x0,   0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c, 0x80c, 0x905, 0xa0f, 0xb06,
@@ -602,7 +740,7 @@ static constexpr signed char MARCHING_CUBES_TRIS[256][16] = {
 	{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 }
 };
 
-[[nodiscard]] constexpr static glm::vec3 vert_interp(
+[[nodiscard]] static constexpr glm::vec3 vert_interp(
 	const glm::vec3& p1, const glm::vec3& p2, float val1, float val2) noexcept
 {
 	return (p1 + (-val1 / (val2 - val1)) * (p2 - p1));
@@ -611,7 +749,7 @@ static constexpr signed char MARCHING_CUBES_TRIS[256][16] = {
 static std::pair<std::vector<glm::vec3>, std::vector<tri>> polygonise(
 	const std::array<float, 8>& cell, const glm::vec3 cellpos)
 {
-	static constexpr float HALFCELL = mxn::world_chunk::CELL_SIZE * 0.5f;
+	static constexpr float SHIFT = mxn::world_chunk::CELL_SIZE;
 
 	size_t ndx = 0;
 
@@ -631,139 +769,87 @@ static std::pair<std::vector<glm::vec3>, std::vector<tri>> polygonise(
 	if (MARCHING_CUBES_EDGES[ndx] & 1)
 	{
 		verts[0] = vert_interp(
-			glm::vec3(HALFCELL * cellpos.x, HALFCELL * cellpos.y, HALFCELL * cellpos.z),
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * cellpos.y,
-				HALFCELL * cellpos.z),
-			cell[0], cell[1]);
+			glm::vec3(cellpos.x, cellpos.y, cellpos.z),
+			glm::vec3(cellpos.x + SHIFT, cellpos.y, cellpos.z), cell[0], cell[1]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 2)
 	{
 		verts[1] = vert_interp(
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * cellpos.y,
-				HALFCELL * cellpos.z),
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * cellpos.z),
-			cell[1], cell[2]);
+			glm::vec3(cellpos.x + SHIFT, cellpos.y, cellpos.z),
+			glm::vec3(cellpos.x + SHIFT, cellpos.y + SHIFT, cellpos.z), cell[1], cell[2]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 4)
 	{
 		verts[2] = vert_interp(
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * cellpos.z),
-			glm::vec3(
-				HALFCELL * cellpos.x, HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * cellpos.z),
-			cell[2], cell[3]);
+			glm::vec3(cellpos.x + SHIFT, cellpos.y + SHIFT, cellpos.z),
+			glm::vec3(cellpos.x, cellpos.y + SHIFT, cellpos.z), cell[2], cell[3]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 8)
 	{
 		verts[3] = vert_interp(
-			glm::vec3(
-				HALFCELL * cellpos.x, HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * cellpos.z),
-			glm::vec3(HALFCELL * cellpos.x, HALFCELL * cellpos.y, HALFCELL * cellpos.z),
-			cell[3], cell[0]);
+			glm::vec3(cellpos.x, cellpos.y + SHIFT, cellpos.z),
+			glm::vec3(cellpos.x, cellpos.y, cellpos.z), cell[3], cell[0]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 16)
 	{
 		verts[4] = vert_interp(
-			glm::vec3(
-				HALFCELL * cellpos.x, HALFCELL * cellpos.y,
-				HALFCELL * (cellpos.z + 1.0f)),
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * cellpos.y,
-				HALFCELL * (cellpos.z + 1.0f)),
-			cell[4], cell[5]);
+			glm::vec3(cellpos.x, cellpos.y, cellpos.z + SHIFT),
+			glm::vec3(cellpos.x + SHIFT, cellpos.y, cellpos.z + SHIFT), cell[4], cell[5]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 32)
 	{
 		verts[5] = vert_interp(
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * cellpos.y,
-				HALFCELL * (cellpos.z + 1.0f)),
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * (cellpos.z + 1.0f)),
-			cell[5], cell[6]);
+			glm::vec3(cellpos.x + SHIFT, cellpos.y, cellpos.z + SHIFT),
+			glm::vec3(cellpos.x + SHIFT, cellpos.y + SHIFT, cellpos.z + SHIFT), cell[5],
+			cell[6]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 64)
 	{
 		verts[6] = vert_interp(
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * (cellpos.z + 1.0f)),
-			glm::vec3(
-				HALFCELL * cellpos.x, HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * (cellpos.z + 1.0f)),
-			cell[6], cell[7]);
+			glm::vec3(cellpos.x + SHIFT, cellpos.y + SHIFT, cellpos.z + SHIFT),
+			glm::vec3(cellpos.x, cellpos.y + SHIFT, cellpos.z + SHIFT), cell[6], cell[7]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 128)
 	{
 		verts[7] = vert_interp(
-			glm::vec3(
-				HALFCELL * cellpos.x, HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * (cellpos.z + 1.0f)),
-			glm::vec3(
-				HALFCELL * cellpos.x, HALFCELL * cellpos.y,
-				HALFCELL * (cellpos.z + 1.0f)),
-			cell[7], cell[4]);
+			glm::vec3(cellpos.x, cellpos.y + SHIFT, cellpos.z + SHIFT),
+			glm::vec3(cellpos.x, cellpos.y, cellpos.z + SHIFT), cell[7], cell[4]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 256)
 	{
 		verts[8] = vert_interp(
-			glm::vec3(HALFCELL * cellpos.x, HALFCELL * cellpos.y, HALFCELL * cellpos.z),
-			glm::vec3(
-				HALFCELL * cellpos.x, HALFCELL * cellpos.y,
-				HALFCELL * (cellpos.z + 1.0f)),
-			cell[0], cell[4]);
+			glm::vec3(cellpos.x, cellpos.y, cellpos.z),
+			glm::vec3(cellpos.x, cellpos.y, cellpos.z + SHIFT), cell[0], cell[4]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 512)
 	{
 		verts[9] = vert_interp(
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * cellpos.y,
-				HALFCELL * cellpos.z),
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * cellpos.y,
-				HALFCELL * (cellpos.z + 1.0f)),
-			cell[1], cell[5]);
+			glm::vec3(cellpos.x + SHIFT, cellpos.y, cellpos.z),
+			glm::vec3(cellpos.x + SHIFT, cellpos.y, cellpos.z + SHIFT), cell[1], cell[5]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 1024)
 	{
 		verts[10] = vert_interp(
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * cellpos.z),
-			glm::vec3(
-				HALFCELL * (cellpos.x + 1.0f), HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * (cellpos.z + 1.0f)),
-			cell[2], cell[6]);
+			glm::vec3(cellpos.x + SHIFT, cellpos.y + SHIFT, cellpos.z),
+			glm::vec3(cellpos.x + SHIFT, cellpos.y + SHIFT, cellpos.z + SHIFT), cell[2],
+			cell[6]);
 	}
 
 	if (MARCHING_CUBES_EDGES[ndx] & 2048)
 	{
 		verts[11] = vert_interp(
-			glm::vec3(
-				HALFCELL * cellpos.x, HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * cellpos.z),
-			glm::vec3(
-				HALFCELL * cellpos.x, HALFCELL * (cellpos.y + 1.0f),
-				HALFCELL * (cellpos.z + 1.0f)),
-			cell[3], cell[7]);
+			glm::vec3(cellpos.x, cellpos.y + SHIFT, cellpos.z),
+			glm::vec3(cellpos.x, cellpos.y + SHIFT, cellpos.z + SHIFT), cell[3], cell[7]);
 	}
 
 	memset(local_remap, -1, sizeof(local_remap));
@@ -772,22 +858,22 @@ static std::pair<std::vector<glm::vec3>, std::vector<tri>> polygonise(
 
 	std::pair<std::vector<glm::vec3>, std::vector<tri>> ret = {};
 
-	for (unsigned int i = 0; cube_tri[i] != -1; i++)
+	for (size_t i = 0; cube_tri[i] != -1; i++)
 	{
 		if (local_remap[cube_tri[i]] != -1) continue;
 
-		ret.first.emplace_back(verts[cube_tri[i]]);
 		local_remap[cube_tri[i]] = ret.first.size();
+		ret.first.emplace_back(verts[cube_tri[i]]);
 	}
 
 	for (size_t i = 0; i < ret.first.size(); i++) verts[i] = ret.first[i];
 
-	for (unsigned int i = 0; cube_tri[i] != -1; i += 3)
+	for (size_t i = 0; cube_tri[i] != -1; i += 3)
 	{
 		ret.second.emplace_back(
-			tri { static_cast<unsigned int>(local_remap[cube_tri[i + 0]]),
-				  static_cast<unsigned int>(local_remap[cube_tri[i + 1]]),
-				  static_cast<unsigned int>(local_remap[cube_tri[i + 2]]) });
+			tri { static_cast<uint32_t>(local_remap[cube_tri[i]]),
+				  static_cast<uint32_t>(local_remap[cube_tri[i + 1]]),
+				  static_cast<uint32_t>(local_remap[cube_tri[i + 2]]) });
 	}
 
 	return ret;
