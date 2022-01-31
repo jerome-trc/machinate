@@ -19,7 +19,7 @@ mxn::console::console()
 {
 	memset(input_buffer, 0, sizeof(input_buffer));
 
-	const auto cmdfunc_help = [&](const std::vector<std::string> args) -> void {
+	const auto cmdfunc_help = [&](const std::vector<std::string>& args) -> void {
 		if (args.size() <= 1)
 		{
 			MXN_LOG("Available commands:");
@@ -47,7 +47,7 @@ mxn::console::console()
 		iter->help(new_args);
 	};
 
-	const auto helpfunc_help = [&](const std::vector<std::string> args) -> void {
+	const auto helpfunc_help = [&](const std::vector<std::string>& args) -> void {
 		if (args.size() <= 1)
 		{
 			MXN_LOG(
@@ -95,42 +95,56 @@ void mxn::console::draw()
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 1.0f));
 
 	ImGuiListClipper clipper;
-	clipper.Begin(items.size());
+	log_mtx.lock();
+	clipper.Begin(entries.size());
 
 	while (clipper.Step())
 	{
 		for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
 		{
-			ImVec4 colour = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+			ImVec4 colour = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
 
-			switch (items[i].type)
+			switch (entries[i].level)
 			{
-			case line_type_t::PLAIN:
-				// Keep the pre-initialised white
+			case quill::LogLevel::Info:
+				colour.x = mxn::GREEN_F[0];
+				colour.y = mxn::GREEN_F[1];
+				colour.z = mxn::GREEN_F[2];
 				break;
-			case line_type_t::INFO:
-				colour = ImVec4(mxn::OFFWHITE_F[0], mxn::OFFWHITE_F[1], mxn::OFFWHITE_F[2], 1.0f);
+			case quill::LogLevel::Warning:
+				colour.x = mxn::YELLOW_F[0];
+				colour.y = mxn::YELLOW_F[1];
+				colour.z = mxn::YELLOW_F[2];
 				break;
-			case line_type_t::ERROR:
-				colour = ImVec4(mxn::RED_F[0], mxn::RED_F[1], mxn::RED_F[2], 1.0f);
+			case quill::LogLevel::Error:
+				colour.x = mxn::RED_F[0];
+				colour.y = mxn::RED_F[1];
+				colour.z = mxn::RED_F[2];
 				break;
-			case line_type_t::HELP:
-				colour = ImVec4(mxn::CYAN_F[0], mxn::CYAN_F[1], mxn::CYAN_F[2], 1.0f);
+			case quill::LogLevel::Critical:
+				colour.x = mxn::PINK_F[0];
+				colour.y = mxn::PINK_F[1];
+				colour.z = mxn::PINK_F[2];
 				break;
-			case line_type_t::INPUT:
-				colour = ImVec4(mxn::GREEN_F[0], mxn::GREEN_F[1], mxn::GREEN_F[2], 1.0f);
+			case quill::LogLevel::Backtrace:
+			case quill::LogLevel::TraceL3:
+			case quill::LogLevel::TraceL2:
+			case quill::LogLevel::TraceL1:
+			case quill::LogLevel::Debug:
+				colour.x = mxn::TEAL_F[0];
+				colour.y = mxn::TEAL_F[1];
+				colour.z = mxn::TEAL_F[2];
 				break;
-			default:
-				// Write in pink to indicate an unexpected result
-				colour = ImVec4(mxn::PINK_F[0], mxn::PINK_F[1], mxn::PINK_F[2], 1.0f);
-				break;
+			case quill::LogLevel::None:
+			default: break;
 			}
 
 			ImGui::PushStyleColor(ImGuiCol_Text, colour);
-			ImGui::TextUnformatted(items[i].text.c_str());
+			ImGui::TextUnformatted(entries[i].text.c_str());
 			ImGui::PopStyleColor();
 		}
 	}
+	log_mtx.unlock();
 
 	if (scroll_to_bottom ||
 		(auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()))
@@ -164,11 +178,7 @@ void mxn::console::draw()
 			(void*)this))
 	{
 		char* s = input_buffer;
-		if (s[0])
-		{
-			std::scoped_lock lock(mutex);
-			pending.emplace_back(s);
-		}
+		if (s[0]) cmd_queue.enqueue(s);
 		strcpy(s, "");
 		reclaim_focus = true;
 	}
@@ -177,11 +187,7 @@ void mxn::console::draw()
 	if (ImGui::Button("Submit"))
 	{
 		char* s = input_buffer;
-		if (s[0])
-		{
-			std::scoped_lock lock(mutex);
-			pending.emplace_back(s);
-		}
+		if (s[0]) cmd_queue.enqueue(s);
 		strcpy(s, "");
 		reclaim_focus = true;
 	}
@@ -189,8 +195,7 @@ void mxn::console::draw()
 	ImGui::SameLine();
 	if (ImGui::Button("Clear"))
 	{
-		items.clear();
-		history.clear();
+		clear_storage();
 	}
 
 	// Auto-focus on window apparition
@@ -203,49 +208,50 @@ void mxn::console::draw()
 void mxn::console::add_command(command cmd)
 {
 	assert(!cmd.key.empty());
+
+	for (size_t i = 0; i < cmd.key.length(); i++)
+		assert(!isspace(cmd.key.at(i)));
+
 	assert(cmd.func != nullptr);
 	commands.push_back(cmd);
 }
 
 void mxn::console::run_pending_commands()
 {
-	std::scoped_lock lock(mutex);
+	std::string cmd;
 
-	for (const auto& p : pending) run_command(p);
-
-	pending.clear();
-}
-
-void mxn::console::retrieve_logs()
-{
-	for (const auto& entry :
-		 static_cast<log_history_handler*>(quillhandler_history)->unload())
-	{
-		line_type_t lt = line_type_t::PLAIN;
-
-		switch (entry.level)
-		{
-		case quill::LogLevel::Warning: lt = line_type_t::WARNING; break;
-		case quill::LogLevel::Error: lt = line_type_t::ERROR; break;
-		case quill::LogLevel::Critical: lt = line_type_t::CRITICAL; break;
-		case quill::LogLevel::Debug: lt = line_type_t::DEBUG; break;
-		case quill::LogLevel::Info: lt = line_type_t::INFO; break;
-		case quill::LogLevel::None: lt = line_type_t::PLAIN; break;
-		default: assert(false); break;
-		}
-
-		items.push_back({ .text = entry.text, .type = lt });
-	}
+	while (cmd_queue.try_dequeue(cmd))
+		run_command(cmd);
 }
 
 // Private implementation details //////////////////////////////////////////////
+
+void mxn::console::write(const fmt::memory_buffer& rec, std::chrono::nanoseconds,
+	quill::LogLevel level)
+{
+	// Split the given buffer by newlines for the ImGui clipper
+
+	size_t next = 0, last = 0;
+	const std::string string(rec.begin(), rec.size() - 1);
+	std::string token;
+
+	const std::scoped_lock lock(log_mtx);
+
+	while ((next = string.find('\n', last)) != std::string::npos)
+	{
+		entries.push_back({ .text = string.substr(last, next - last),
+							.level = level });
+		last = next + 1;
+	}
+
+	entries.push_back({ .text = string.substr(last), .level = level });
+}
 
 void mxn::console::run_command(const std::string& string)
 {
 	if (string == "clear")
 	{
-		items.clear();
-		history.clear();
+		clear_storage();
 		return;
 	}
 
@@ -269,7 +275,7 @@ void mxn::console::run_command(const std::string& string)
 	{
 		if (cmd.key == args[0])
 		{
-			cmd.func(std::move(args));
+			cmd.func(args);
 			scroll_to_bottom = true;
 			return;
 		}
@@ -279,6 +285,13 @@ void mxn::console::run_command(const std::string& string)
 
 	scroll_to_bottom = true;
 	MXN_LOGF("Unknown command: {}", args[0]);
+}
+
+void mxn::console::clear_storage()
+{
+	const std::scoped_lock lock(log_mtx);
+	entries.clear();
+	history.clear();
 }
 
 int mxn::console::text_edit(ImGuiInputTextCallbackData* const data)

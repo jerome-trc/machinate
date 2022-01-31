@@ -193,33 +193,17 @@ void mxn::ccmd_file(const std::string& path)
 const std::chrono::system_clock::time_point mxn::start_time =
 	std::chrono::system_clock::now();
 
-quill::Handler* mxn::quillhandler_file = nullptr;
-quill::Handler* mxn::quillhandler_stdout = nullptr;
-quill::Handler* mxn::quillhandler_history = nullptr;
-
 quill::Logger* mxn::qlog = nullptr;
 
-void mxn::log_init()
+void mxn::log_init(const std::initializer_list<quill::Handler*> handlers)
 {
 #ifdef _WIN32
 	quill::init_signal_handler();
 #endif
-
 	quill::enable_console_colours();
 	quill::start(true);
 	quill::preallocate();
-
-	quillhandler_stdout = quill::stdout_handler();
-	quillhandler_stdout->set_pattern(
-		QUILL_STRING("%(ascii_time) [%(thread)] %(filename):%(lineno) "
-					 "%(level_name): %(message)"),
-		"%H:%M:%S");
-	quillhandler_history = quill::create_handler<log_history_handler>("history");
-	quillhandler_history->set_pattern(QUILL_STRING("%(level_name): %(message)"));
-
-	qlog =
-		quill::create_logger("mxn_logger", { quillhandler_stdout, quillhandler_history });
-
+	qlog = quill::create_logger("mxn_logger", handlers);
 	qlog->set_log_level(quill::LogLevel::Debug);
 }
 

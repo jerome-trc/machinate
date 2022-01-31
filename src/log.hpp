@@ -11,61 +11,6 @@
 
 namespace mxn
 {
-	struct log_entry final
-	{
-		const std::string text;
-		const quill::LogLevel level;
-	};
-
-	/** @brief Quill handler; keeps history to print to the ImGui engine log. */
-	class log_history_handler final : public quill::Handler
-	{
-		std::vector<log_entry> entries;
-		mutable std::mutex mtx;
-
-	public:
-		log_history_handler() = default;
-		DELETE_COPIERS_AND_MOVERS(log_history_handler)
-
-		void write(
-			fmt::memory_buffer const& fmted_log_rec, std::chrono::nanoseconds,
-			quill::LogLevel log_msg_severity) override
-		{
-			const std::scoped_lock lock(mtx);
-
-			// Split the given buffer by newlines for the ImGui clipper
-
-			size_t next = 0, last = 0;
-			const std::string string(fmted_log_rec.begin(), fmted_log_rec.size() - 1);
-			std::string token;
-
-			while ((next = string.find('\n', last)) != std::string::npos)
-			{
-				// token = string.substr(last, next - last);
-				entries.push_back({ .text = string.substr(last, next - last),
-									.level = log_msg_severity });
-				last = next + 1;
-			}
-
-			entries.push_back({ .text = string.substr(last), .level = log_msg_severity });
-		}
-
-		// Called periodically, or when no more LOG_* writes remain to process.
-		void flush() noexcept override { std::cout << std::flush; }
-
-		[[nodiscard]] std::vector<log_entry> unload() noexcept
-		{
-			const std::scoped_lock lock(mtx);
-			auto ret = std::move(entries);
-			entries = std::vector<log_entry>();
-			return ret;
-		}
-	};
-
-	extern quill::Handler* quillhandler_file;
-	extern quill::Handler* quillhandler_stdout;
-	extern quill::Handler* quillhandler_history;
-
 	extern quill::Logger* qlog;
 
 	/**
@@ -75,7 +20,7 @@ namespace mxn
 	 * and `quill::preallocate()` before finally constructing handlers and the
 	 * logger object.
 	 */
-	void log_init();
+	void log_init(std::initializer_list<quill::Handler*>);
 } // namespace mxn
 
 /**

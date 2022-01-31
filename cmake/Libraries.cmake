@@ -38,6 +38,7 @@ CPMAddPackage(
 	OPTIONS ${MXN_ASSIMP_OPTIONS}
 )
 
+find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
@@ -52,6 +53,7 @@ find_package(xxHash CONFIG REQUIRED)
 
 set(MXN_LIBS
 	assimp::assimp
+	unofficial::concurrentqueue::concurrentqueue
 	glm::glm
 	imgui::imgui
 	libDaScript

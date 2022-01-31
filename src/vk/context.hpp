@@ -130,7 +130,7 @@ namespace mxn::vk
 		}
 
 		/** @brief Implements the `vkdiag` console command. */
-		void vkdiag(const std::vector<std::string> args) const;
+		void vkdiag(const std::vector<std::string>& args) const;
 
 	private:
 		// Swapchain components ////////////////////////////////////////////////

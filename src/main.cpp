@@ -19,15 +19,23 @@ int main(const int arg_c, const char* const argv[])
 {
 	tracy::SetThreadName("Main");
 
+	auto qh_stdout = quill::stdout_handler();
+	qh_stdout->set_pattern(
+		QUILL_STRING("%(ascii_time) [%(thread)] %(filename):%(lineno) "
+					 "%(level_name): %(message)"),
+		"%H:%M:%S");
+	mxn::console* console = dynamic_cast<mxn::console*>(quill::create_handler<mxn::console>("console"));
+	console->set_pattern(QUILL_STRING("%(level_name): %(message)"));
+	mxn::log_init({ qh_stdout, console });
+
+	MXN_LOGF(
+		"Machinate version {}.{}.{}", Machinate_VERSION_MAJOR, Machinate_VERSION_MINOR,
+		Machinate_VERSION_PATCH);
+
 	// Seed `rand()` for trivial RNG uses
 	const auto curTime = std::chrono::system_clock::now().time_since_epoch().count();
 	const auto curTime_uint = static_cast<unsigned int>(curTime);
 	srand(curTime_uint);
-
-	mxn::log_init();
-	MXN_LOGF(
-		"Machinate version {}.{}.{}", Machinate_VERSION_MAJOR, Machinate_VERSION_MINOR,
-		Machinate_VERSION_PATCH);
 
 	mxn::vfs_init(argv[0]);
 	mxn::vfs_mount("assets", "/");
@@ -46,23 +54,22 @@ int main(const int arg_c, const char* const argv[])
 	const ImGuiIO& imgui_io = ImGui::GetIO();
 
 	// Developer/debug console initialisation
-	mxn::console console;
-	console.add_command({ .key = "vkdiag",
-						  .func = [&](const std::vector<std::string> args) -> void {
+	console->add_command({ .key = "vkdiag",
+						  .func = [&](const std::vector<std::string>& args) -> void {
 							  vulkan.vkdiag(std::move(args));
 						  },
-						  .help = [](const std::vector<std::string> args) -> void {
+						  .help = [](const std::vector<std::string>& args) -> void {
 							  MXN_LOG(
 								  "Print information about the Vulkan renderer or this "
 								  "system's Vulkan implementation.");
 							  MXN_LOG("Usage: vkdiag ext|gpu|queue");
 						  } });
-	console.add_command(
+	console->add_command(
 		{ .key = "file",
-		  .func = [&](const std::vector<std::string> args) -> void {
+		  .func = [&](const std::vector<std::string>& args) -> void {
 			  mxn::ccmd_file(args.size() > 1 ? args[1] : "/");
 		  },
-		  .help = [](const std::vector<std::string> args) -> void {
+		  .help = [](const std::vector<std::string>& args) -> void {
 			  MXN_LOG("List the contents of a directory in the virtual file system.");
 		  } });
 
@@ -74,7 +81,7 @@ int main(const int arg_c, const char* const argv[])
 
 			if (draw_imgui_metrics) ImGui::ShowMetricsWindow(&draw_imgui_metrics);
 
-			console.draw();
+			console->draw();
 
 			if (!vulkan.start_render())
 				vulkan.rebuild_swapchain(main_window.get_sdl_window());
@@ -120,7 +127,7 @@ int main(const int arg_c, const char* const argv[])
 
 				switch (event.key.keysym.sym)
 				{
-				case SDLK_BACKQUOTE: console.toggle(); break;
+				case SDLK_BACKQUOTE: console->toggle(); break;
 				// TODO: Binding immediate termination to escape is temporary
 				case SDLK_ESCAPE: running = false; break;
 				default: break;
@@ -131,8 +138,7 @@ int main(const int arg_c, const char* const argv[])
 			} // switch (event.type)
 		} // while (SDL_PollEvent(&event) != 0)
 
-		console.retrieve_logs();
-		console.run_pending_commands();
+		console->run_pending_commands();
 	} while (running);
 
 	render_thread.join();

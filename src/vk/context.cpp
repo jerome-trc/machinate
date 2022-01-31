@@ -696,7 +696,7 @@ void context::record_image_layout_change(
 		::vk::DependencyFlags(), {}, {}, barrier);
 }
 
-void context::vkdiag(const std::vector<std::string> args) const
+void context::vkdiag(const std::vector<std::string>& args) const
 {
 	if (args.size() <= 1)
 	{
