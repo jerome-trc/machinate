@@ -7,10 +7,15 @@
 
 #include "preproc.hpp"
 
+#include <Aulib/Stream.h>
+#include <mutex>
+#include <filesystem>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/vec3.hpp>
+#include <physfs.h>
 #include <string>
+#include <thread>
 #include <vector>
 
 struct SDL_Window;
@@ -75,9 +80,26 @@ namespace mxn
 		const uint8_t* key_states = nullptr;
 		int keystate_c = 0;
 
+		bool alive;
+		std::thread audio_worker;
+		std::mutex audio_mutex;
+		std::unordered_map<std::string, std::vector<unsigned char>> audiomem;
+		std::vector<std::unique_ptr<Aulib::Stream>> sfx;
+		std::optional<Aulib::Stream> music;
+
+		static PHYSFS_EnumerateCallbackResult load_audio_memory(
+			void* data, const char* orig_dir, const char* fname);
+
 	public:
 		media_context();
-		~media_context() noexcept;
+		~media_context();
 		DELETE_COPIERS_AND_MOVERS(media_context)
+
+		void stop_all_sound();
+		void play_sound(const std::filesystem::path&,
+			float volume = 1.0f, float pan = 0.0f);
+
+		void stop_music();
+		void play_music(const std::filesystem::path&);
 	};
 } // namespace mxn

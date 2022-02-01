@@ -28,6 +28,10 @@ Note that this is a living document. Completeness is not guaranteed. If no autho
 	- By Odysseas "odygrd" Georgoudis et. al.
 	- Used under the [MIT License](https://github.com/odygrd/quill/blob/master/LICENSE).
 	- https://github.com/odygrd/quill
+- SDL_audiolib
+	- By Nikos "realnc" Chantziaras et. al.
+	- Used under the [GNU Lesser General Public License 3.0](https://github.com/realnc/SDL_audiolib/blob/master/COPYING).
+	- https://github.com/realnc/SDL_audiolib
 - Simple DirectMedia Layer 2 (SDL2)
 	- By Sam Lantinga et. al
 	- https://www.libsdl.org/

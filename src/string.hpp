@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <string>
+
 /** @brief Shorthand for `strcmp(s1, s2) == 0`. */
 bool streq(const char* const s1, const char* const s2);
 

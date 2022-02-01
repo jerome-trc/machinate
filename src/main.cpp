@@ -72,6 +72,39 @@ int main(const int arg_c, const char* const argv[])
 		  .help = [](const std::vector<std::string>& args) -> void {
 			  MXN_LOG("List the contents of a directory in the virtual file system.");
 		  } });
+	console->add_command({
+		.key = "sound",
+		.func = [&](const std::vector<std::string>& args) -> void {
+			if (args.size() == 1)
+				return;
+			else if (args[1] == "~" || args[1] == "!")
+				media.stop_all_sound();
+			else
+				media.play_sound(args[1]);
+		},
+		.help = [](const std::vector<std::string>& args) -> void {
+			MXN_LOGF("Usage: sound <arg>\n{}",
+				"If <arg> is \"~\" or \"!\", all sound is stopped.");
+		}
+	});
+	console->add_command({
+		.key = "music",
+		.func = [&](const std::vector<std::string>& args) -> void {
+			if (args.size() == 1)
+			{
+				
+			}
+			else if (args[1] == "~" || args[1] == "!")
+				media.stop_music();
+			else
+				media.play_music(args[1]);
+		},
+		.help = [](const std::vector<std::string>& args) -> void {
+			MXN_LOGF("Usage: music <arg>\n{}\n{}",
+				"If no <arg> is given, the path of the current music is printed.",
+				"If <arg> is \"~\" or \"!\", the current music is stopped.");
+		}
+	});
 
 	std::thread render_thread([&]() -> void {
 		tracy::SetThreadName("Render");
