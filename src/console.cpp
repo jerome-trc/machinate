@@ -22,10 +22,16 @@ mxn::console::console()
 	const auto cmdfunc_help = [&](const std::vector<std::string>& args) -> void {
 		if (args.size() <= 1)
 		{
-			MXN_LOG("Available commands:");
+			std::string output = "Available commands:";
 
-			for (const auto& cmd : this->commands) MXN_LOG(cmd.key);
+			for (const auto& cmd : this->commands)
+			{
+				output += '\n';
+				output += '\t';
+				output += cmd.key;
+			}
 
+			MXN_LOG(output);
 			return;
 		}
 
