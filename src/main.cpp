@@ -17,7 +17,7 @@
 
 int main(const int arg_c, const char* const argv[])
 {
-	tracy::SetThreadName("Main");
+	tracy::SetThreadName("MXN: Main");
 
 	auto qh_stdout = quill::stdout_handler();
 	qh_stdout->set_pattern(
@@ -107,7 +107,8 @@ int main(const int arg_c, const char* const argv[])
 	});
 
 	std::thread render_thread([&]() -> void {
-		tracy::SetThreadName("Render");
+		tracy::SetThreadName("MXN: Render");
+
 		do
 		{
 			main_window.new_imgui_frame();

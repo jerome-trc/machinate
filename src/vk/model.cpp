@@ -434,7 +434,7 @@ model_importer::model_importer(
 {
 	thread = std::thread([&]() -> void {
 		tracy::SetThreadName(
-			fmt::format("Model Import, {}", reinterpret_cast<void*>(this)).c_str());
+			fmt::format("MXN: Model Import, {}", reinterpret_cast<void*>(this)).c_str());
 
 		for (const auto& path : paths)
 		{

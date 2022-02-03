@@ -118,7 +118,7 @@ mxn::media_context::media_context()
 	vfs_recur("", reinterpret_cast<void*>(&audiomem), load_audio_memory);
 
 	audio_worker = std::thread([&]() -> void {
-		tracy::SetThreadName("Audio Worker");
+		tracy::SetThreadName("MXN: Audio Worker");
 
 		while (alive)
 		{
