@@ -6,10 +6,17 @@
 #pragma once
 
 #include "../ecs.hpp"
+#include "ubo.hpp"
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 #include <vk_mem_alloc.h>
+#include <vulkan/vulkan.hpp>
+
+namespace mxn
+{
+	struct camera;
+}
 
 namespace mxn::vk
 {
@@ -36,11 +43,16 @@ namespace mxn::vk
 		.priority = 0.0f
 	};
 
-	/// @brief UBO representation of a worldview's camera.
+	/// @brief Vulkan representation of `mxn::camera`.
 	struct camera final
 	{
-		glm::mat4 view, proj, viewproj;
-		glm::vec3 position;
+		struct
+		{
+			glm::mat4 view = {}, proj = {}, projview = {};
+			glm::vec3 position = {};
+		} camera;
+
+		void update(const context&, const mxn::camera& viewp);
 	};
 
 	static constexpr uint32_t INVALID_QUEUE_FAMILY = std::numeric_limits<uint32_t>::max(),

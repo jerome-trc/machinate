@@ -55,6 +55,8 @@ namespace mxn::vk
 		 */
 		[[nodiscard]] bool start_render() noexcept;
 
+		void set_camera(const ubo<camera>& uniform);
+
 		void start_render_record() noexcept;
 		void bind_material(const mxn::vk::material&) noexcept;
 		void record_draw(const mxn::vk::model&) noexcept;
@@ -118,6 +120,11 @@ namespace mxn::vk
 			return images.size();
 		}
 
+		[[nodiscard]] constexpr const ::vk::Extent2D& get_swapchain_extent() const noexcept
+		{
+			return extent;
+		}
+
 		template<typename T>
 		void set_debug_name(const T& obj, const std::string& name) const
 		{
@@ -148,7 +155,6 @@ namespace mxn::vk
 		::vk::DescriptorSetLayout dsl_obj, dsl_cam, dsl_lightcull, dsl_inter, dsl_mat;
 
 		ubo<glm::mat4> ubo_obj;
-		ubo<camera> ubo_cam;
 		ubo<std::vector<point_light>, POINTLIGHT_BUFSIZE> ubo_lights;
 
 		pipeline ppl_render, ppl_depth, ppl_comp;
@@ -212,7 +218,6 @@ namespace mxn::vk
 		[[nodiscard]] std::array<::vk::DescriptorSet, 4> create_descsets() const;
 
 		void update_descset_obj() const;
-		void update_descset_cam() const;
 		void update_descset_inter() const;
 
 		[[nodiscard]] glm::uvec2 update_lightcull_tilecounts() const;

@@ -24,7 +24,8 @@ int main(const int arg_c, const char* const argv[])
 		QUILL_STRING("%(ascii_time) [%(thread)] %(filename):%(lineno) "
 					 "%(level_name): %(message)"),
 		"%H:%M:%S");
-	mxn::console* console = dynamic_cast<mxn::console*>(quill::create_handler<mxn::console>("console"));
+	mxn::console* console =
+		dynamic_cast<mxn::console*>(quill::create_handler<mxn::console>("console"));
 	console->set_pattern(QUILL_STRING("%(level_name): %(message)"));
 	mxn::log_init({ qh_stdout, console });
 
@@ -44,6 +45,9 @@ int main(const int arg_c, const char* const argv[])
 	mxn::window main_window("Machinate");
 	mxn::vk::context vulkan(main_window.get_sdl_window());
 
+	mxn::camera camera;
+	mxn::vk::ubo<mxn::vk::camera> vk_cam(vulkan, "MXN: UBO, Camera");
+
 	// Script backend initialisation
 	NEED_ALL_DEFAULT_MODULES;
 	NEED_MODULE(script_core);
@@ -55,15 +59,15 @@ int main(const int arg_c, const char* const argv[])
 
 	// Developer/debug console initialisation
 	console->add_command({ .key = "vkdiag",
-						  .func = [&](const std::vector<std::string>& args) -> void {
-							  vulkan.vkdiag(std::move(args));
-						  },
-						  .help = [](const std::vector<std::string>& args) -> void {
-							  MXN_LOG(
-								  "Print information about the Vulkan renderer or this "
-								  "system's Vulkan implementation.");
-							  MXN_LOG("Usage: vkdiag ext|gpu|queue");
-						  } });
+						   .func = [&](const std::vector<std::string>& args) -> void {
+							   vulkan.vkdiag(std::move(args));
+						   },
+						   .help = [](const std::vector<std::string>& args) -> void {
+							   MXN_LOG(
+								   "Print information about the Vulkan renderer or this "
+								   "system's Vulkan implementation.");
+							   MXN_LOG("Usage: vkdiag ext|gpu|queue");
+						   } });
 	console->add_command(
 		{ .key = "file",
 		  .func = [&](const std::vector<std::string>& args) -> void {
@@ -72,39 +76,35 @@ int main(const int arg_c, const char* const argv[])
 		  .help = [](const std::vector<std::string>& args) -> void {
 			  MXN_LOG("List the contents of a directory in the virtual file system.");
 		  } });
-	console->add_command({
-		.key = "sound",
-		.func = [&](const std::vector<std::string>& args) -> void {
-			if (args.size() == 1)
-				return;
-			else if (args[1] == "~" || args[1] == "!")
-				media.stop_all_sound();
-			else
-				media.play_sound(args[1]);
-		},
-		.help = [](const std::vector<std::string>& args) -> void {
-			MXN_LOGF("Usage: sound <arg>\n{}",
-				"If <arg> is \"~\" or \"!\", all sound is stopped.");
-		}
-	});
-	console->add_command({
-		.key = "music",
-		.func = [&](const std::vector<std::string>& args) -> void {
-			if (args.size() == 1)
-			{
-				
-			}
-			else if (args[1] == "~" || args[1] == "!")
-				media.stop_music();
-			else
-				media.play_music(args[1]);
-		},
-		.help = [](const std::vector<std::string>& args) -> void {
-			MXN_LOGF("Usage: music <arg>\n{}\n{}",
-				"If no <arg> is given, the path of the current music is printed.",
-				"If <arg> is \"~\" or \"!\", the current music is stopped.");
-		}
-	});
+	console->add_command({ .key = "sound",
+						   .func = [&](const std::vector<std::string>& args) -> void {
+							   if (args.size() == 1)
+								   return;
+							   else if (args[1] == "~" || args[1] == "!")
+								   media.stop_all_sound();
+							   else
+								   media.play_sound(args[1]);
+						   },
+						   .help = [](const std::vector<std::string>& args) -> void {
+							   MXN_LOGF(
+								   "Usage: sound <arg>\n{}",
+								   "If <arg> is \"~\" or \"!\", all sound is stopped.");
+						   } });
+	console->add_command(
+		{ .key = "music",
+		  .func = [&](const std::vector<std::string>& args) -> void {
+			  if (args.size() == 1) { }
+			  else if (args[1] == "~" || args[1] == "!")
+				  media.stop_music();
+			  else
+				  media.play_music(args[1]);
+		  },
+		  .help = [](const std::vector<std::string>& args) -> void {
+			  MXN_LOGF(
+				  "Usage: music <arg>\n{}\n{}",
+				  "If no <arg> is given, the path of the current music is printed.",
+				  "If <arg> is \"~\" or \"!\", the current music is stopped.");
+		  } });
 
 	std::thread render_thread([&]() -> void {
 		tracy::SetThreadName("MXN: Render");
@@ -117,8 +117,13 @@ int main(const int arg_c, const char* const argv[])
 
 			console->draw();
 
+			vk_cam.data.update(vulkan, camera);
+			vk_cam.update(vulkan);
+
 			if (!vulkan.start_render())
 				vulkan.rebuild_swapchain(main_window.get_sdl_window());
+
+			vulkan.set_camera(vk_cam);
 
 			vulkan.start_render_record();
 			vulkan.end_render_record();
@@ -176,6 +181,9 @@ int main(const int arg_c, const char* const argv[])
 	} while (running);
 
 	render_thread.join();
+
+	vk_cam.destroy(vulkan);
+
 	das::Module::Shutdown();
 	MXN_LOGF("Runtime duration: {}", mxn::runtime_s());
 	mxn::vfs_deinit();

@@ -139,7 +139,6 @@ context::context(SDL_Window* const window)
 	dsl_mat = dsls[4];
 
 	ubo_obj = ubo<glm::mat4>(*this, "Objects");
-	ubo_cam = ubo<camera>(*this, "Camera");
 	ubo_lights = ubo<std::vector<point_light>, POINTLIGHT_BUFSIZE>(
 		*this, qfam_gfx, 0u, "Point Lights");
 
@@ -160,15 +159,6 @@ context::context(SDL_Window* const window)
 	descset_lightcull = descsets[2];
 	descset_inter = descsets[3];
 	update_descset_obj();
-	update_descset_cam();
-
-	const ::vk::DescriptorBufferInfo uboinfo_cam(
-		ubo_cam.get_buffer(), 0, ubo_cam.data_size);
-	const std::array descwrites = { ::vk::WriteDescriptorSet(
-		descset_cam, 0, 0, 1, ::vk::DescriptorType::eUniformBuffer, nullptr, &uboinfo_cam,
-		nullptr) };
-	const std::array<::vk::CopyDescriptorSet, 0> desccopies = {};
-	device.updateDescriptorSets(descwrites, desccopies);
 
 	create_swapchain(window);
 
@@ -261,7 +251,6 @@ context::~context()
 	destroy_swapchain();
 
 	ubo_obj.destroy(*this);
-	ubo_cam.destroy(*this);
 	ubo_lights.destroy(*this);
 
 	device.destroyDescriptorSetLayout(dsl_mat, nullptr);
@@ -313,6 +302,17 @@ bool context::start_render() noexcept
 	img_idx = res_acq.value;
 
 	return res_acq.result != ::vk::Result::eErrorOutOfDateKHR;
+}
+
+void context::set_camera(const ubo<camera>& uniform)
+{
+	const ::vk::DescriptorBufferInfo dbi(uniform.get_buffer(), 0, uniform.data_size);
+
+	const ::vk::WriteDescriptorSet descwrite(
+		descset_cam, 0, 0, ::vk::DescriptorType::eUniformBuffer, NO_DESCIMG_INFO, dbi,
+		NO_BUFVIEWS);
+
+	device.updateDescriptorSets(descwrite, {});
 }
 
 void context::start_render_record() noexcept
@@ -422,6 +422,38 @@ const ::vk::Semaphore& context::compute_lightcull(
 	static constexpr std::array<::vk::PipelineStageFlags, 1> WAITSTAGES_LIGHTCULL = {
 		::vk::PipelineStageFlagBits::eComputeShader
 	};
+
+	cmdbuf_lightcull.begin(::vk::CommandBufferBeginInfo(
+		::vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr));
+
+	const std::array<::vk::BufferMemoryBarrier, 2> barriers_pre = {
+		::vk::BufferMemoryBarrier(
+			::vk::AccessFlagBits::eShaderRead, ::vk::AccessFlagBits::eShaderWrite, 0,
+			0, lightvis.buffer, 0, TILE_BUFFERSIZE * tile_count.x * tile_count.y),
+		::vk::BufferMemoryBarrier(
+			::vk::AccessFlagBits::eShaderRead, ::vk::AccessFlagBits::eShaderWrite, 0,
+			0, ubo_lights.get_buffer(), 0, ubo_lights.data_size)
+	};
+
+	cmdbuf_lightcull.pipelineBarrier(
+		::vk::PipelineStageFlagBits::eFragmentShader,
+		::vk::PipelineStageFlagBits::eComputeShader, ::vk::DependencyFlags(), {},
+		barriers_pre, {});
+
+	cmdbuf_lightcull.bindDescriptorSets(
+		::vk::PipelineBindPoint::eCompute, ppl_comp.layout, 0,
+		std::array { descset_lightcull, descset_cam, descset_inter },
+		std::array<uint32_t, 0>());
+
+	cmdbuf_lightcull.pushConstants<pushconst>(
+		ppl_comp.layout, ::vk::ShaderStageFlagBits::eCompute, 0,
+		std::array { pushconst { .viewport_size = { extent.width, extent.height },
+									.tile_nums = tile_count,
+									.debugview_index = 0 } });
+	cmdbuf_lightcull.bindPipeline(::vk::PipelineBindPoint::eCompute, ppl_comp.handle);
+	cmdbuf_lightcull.dispatch(tile_count.x, tile_count.y, 1);
+
+	cmdbuf_lightcull.end();
 
 	const ::vk::SubmitInfo lightcull_info(
 		wait_semas, WAITSTAGES_LIGHTCULL, cmdbuf_lightcull, sema_lightculldone);
@@ -535,7 +567,7 @@ material context::create_material(
 {
 	const ::vk::DescriptorSetAllocateInfo alloc_info(descpool, dsl_mat);
 
-	auto ret = mxn::vk::material {
+	mxn::vk::material ret {
 		.info { *this, fmt::format("MXN: UBO, Material Info, {}", debug_name) },
 		.descset = device.allocateDescriptorSets(alloc_info)[0],
 		.albedo = vma_image::from_file(*this, albedo),
@@ -1466,17 +1498,6 @@ void context::update_descset_obj() const
 	device.updateDescriptorSets(descwrite, {});
 }
 
-void context::update_descset_cam() const
-{
-	const ::vk::DescriptorBufferInfo dbi(ubo_cam.get_buffer(), 0, ubo_cam.data_size);
-
-	const ::vk::WriteDescriptorSet descwrite(
-		descset_cam, 0, 0, ::vk::DescriptorType::eUniformBuffer, NO_DESCIMG_INFO, dbi,
-		NO_BUFVIEWS);
-
-	device.updateDescriptorSets(descwrite, {});
-}
-
 void context::update_descset_inter() const
 {
 	const ::vk::DescriptorImageInfo dii(
@@ -1556,38 +1577,6 @@ std::tuple<std::vector<::vk::CommandBuffer>, ::vk::CommandBuffer, ::vk::CommandB
 
 		ret_lightcull = device.allocateCommandBuffers(alloc_info)[0];
 		set_debug_name(ret_lightcull, "MXN: Cmd. Buffer, Light Culling");
-
-		ret_lightcull.begin(::vk::CommandBufferBeginInfo(
-			::vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr));
-
-		const std::array<::vk::BufferMemoryBarrier, 2> barriers_pre = {
-			::vk::BufferMemoryBarrier(
-				::vk::AccessFlagBits::eShaderRead, ::vk::AccessFlagBits::eShaderWrite, 0,
-				0, lightvis.buffer, 0, TILE_BUFFERSIZE * tile_count.x * tile_count.y),
-			::vk::BufferMemoryBarrier(
-				::vk::AccessFlagBits::eShaderRead, ::vk::AccessFlagBits::eShaderWrite, 0,
-				0, ubo_lights.get_buffer(), 0, ubo_lights.data_size)
-		};
-
-		ret_lightcull.pipelineBarrier(
-			::vk::PipelineStageFlagBits::eFragmentShader,
-			::vk::PipelineStageFlagBits::eComputeShader, ::vk::DependencyFlags(), {},
-			barriers_pre, {});
-
-		ret_lightcull.bindDescriptorSets(
-			::vk::PipelineBindPoint::eCompute, ppl_comp.layout, 0,
-			std::array { descset_lightcull, descset_cam, descset_inter },
-			std::array<uint32_t, 0>());
-
-		ret_lightcull.pushConstants<pushconst>(
-			ppl_comp.layout, ::vk::ShaderStageFlagBits::eCompute, 0,
-			std::array { pushconst { .viewport_size = { extent.width, extent.height },
-									 .tile_nums = tile_count,
-									 .debugview_index = 0 } });
-		ret_lightcull.bindPipeline(::vk::PipelineBindPoint::eCompute, ppl_comp.handle);
-		ret_lightcull.dispatch(tile_count.x, tile_count.y, 1);
-
-		ret_lightcull.end();
 	}
 
 	// Depth pre-pass //////////////////////////////////////////////////////////
@@ -1811,8 +1800,14 @@ uint32_t context::ctor_get_qfam_trans() const
 
 	const auto feats = gpu.getFeatures();
 
-	const ::vk::DeviceCreateInfo dev_ci(
-		::vk::DeviceCreateFlags(), devq_ci, VALIDATION_LAYERS, DEVICE_EXTENSIONS, &feats);
+	::vk::PhysicalDeviceMultiviewFeaturesKHR mvfeats(true, false, true);
+
+	::vk::PhysicalDeviceFeatures2 feats2(feats);
+	feats2.pNext = reinterpret_cast<void*>(&mvfeats);
+
+	::vk::DeviceCreateInfo dev_ci(
+		::vk::DeviceCreateFlags(), devq_ci, VALIDATION_LAYERS, DEVICE_EXTENSIONS, nullptr);
+	dev_ci.pNext = &feats2;
 
 	return gpu.createDevice(dev_ci, nullptr);
 }

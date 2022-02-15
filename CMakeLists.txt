@@ -83,6 +83,7 @@ add_executable(${PROJECT_NAME}
 
 	"${CMAKE_SOURCE_DIR}/src/vk/buffer.cpp"
 	"${CMAKE_SOURCE_DIR}/src/vk/context.cpp"
+	"${CMAKE_SOURCE_DIR}/src/vk/detail.cpp"
 	"${CMAKE_SOURCE_DIR}/src/vk/image.cpp"
 	"${CMAKE_SOURCE_DIR}/src/vk/model.cpp"
 	"${CMAKE_SOURCE_DIR}/src/vk/pipeline.cpp"

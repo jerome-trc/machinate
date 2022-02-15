@@ -5,13 +5,14 @@
 
 #pragma once
 
+#include "buffer.hpp"
+
 #include <string>
 #include <vector>
 
 namespace mxn::vk
 {
 	class context;
-	struct vma_buffer;
 
 	/// @brief Wraps a uniform buffer object's data, staging buffer, and holding buffer.
 	/// @param T Can be a container if it comes with `data()` and size()` methods.

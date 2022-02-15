@@ -25,14 +25,18 @@ namespace mxn
 {
 	struct camera final
 	{
-		alignas(16) glm::vec3 position;
-		alignas(16) glm::quat rotation;
-		alignas(16) glm::vec3 vel_linear, vel_angular;
-
-		[[nodiscard]] glm::mat4 view() const
+		struct
 		{
-			return glm::transpose(glm::toMat4(rotation)) *
-				   glm::translate(glm::mat4(1.0f), -position);
+			glm::vec3 position, vel_linear, vel_angular;
+			glm::quat rotation;
+		} camera;
+
+		// In the future, this may contain shading info., etc.
+	
+		[[nodiscard]] glm::mat4 view_matrix() const
+		{
+			return glm::transpose(glm::toMat4(camera.rotation)) *
+				   glm::translate(glm::mat4(1.0f), -camera.position);
 		}
 	};
 
