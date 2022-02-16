@@ -17,6 +17,11 @@
 
 int main(const int arg_c, const char* const argv[])
 {
+	if (arg_c <= 0)
+	{
+		throw std::invalid_argument("`main()` requires at least the executable name.");
+	}
+
 	tracy::SetThreadName("MXN: Main");
 
 	auto qh_stdout = quill::stdout_handler();
