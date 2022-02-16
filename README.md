@@ -6,7 +6,7 @@ Machinate is a personal project meant to:
 2. Expand my knowledge about optimisation, API design, and concurrency;
 3. Explore to find the best parts of the C++ library ecosystem;
 4. Learn graphics technology by way of Vulkan;
-5. Provide, if the project matures enough, a fully 3D spiritual successor to Transport Tycoon Deluxe like Planet Coaster provided for Roller Coaster Tycoon.
+5. Explore an idea I have for an RTS with detailed simulation, a large scale, and high-level gameplay abstractions.
 
 ## Licensing
 

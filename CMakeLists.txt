@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(Machinate
 	VERSION 0.0.0
-	DESCRIPTION "Transport Tycoon-like game"
+	DESCRIPTION "Large-scale indirect-control RTS"
 	HOMEPAGE_URL "https://github.com/j-martina/machinate"
 )
 
