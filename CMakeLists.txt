@@ -33,9 +33,14 @@ set(CMAKE_C_STANDARD_REQUIRED YES)
 
 set(MXN_COMPILE_OPTIONS
 	$<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Wpedantic -fexceptions>
+	$<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Wpedantic -fexceptions>
 	$<$<CXX_COMPILER_ID:MSVC>:/Wall>
 	$<$<CXX_COMPILER_ID:GNU>:
 		$<$<CONFIG:DEBUG>:-O0;-g3;-ggdb>
+		$<$<CONFIG:RELEASE>:-O3;-Os>
+	>
+	$<$<CXX_COMPILER_ID:Clang>:
+		$<$<CONFIG:DEBUG>:-O0;-g3;-ggdb3>
 		$<$<CONFIG:RELEASE>:-O3;-Os>
 	>
 	$<$<CXX_COMPILER_ID:MSVC>:

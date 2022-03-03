@@ -61,22 +61,22 @@ namespace mxn::vk
 		void bind_material(const mxn::vk::material&) noexcept;
 		void record_draw(const mxn::vk::model&) noexcept;
 		void end_render_record() noexcept;
-		
+
 		[[nodiscard]] const ::vk::Semaphore& submit_prepass(
-			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas
-		) noexcept;
+			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>&
+				wait_semas) noexcept;
 
 		/**
 		 * @brief Invokes the light culling computation command buffer.
 		 * @returns The semaphore which will signal when computation is complete.
 		 */
 		[[nodiscard]] const ::vk::Semaphore& compute_lightcull(
-			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas
-		) noexcept;
+			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>&
+				wait_semas) noexcept;
 
 		[[nodiscard]] const ::vk::Semaphore& submit_geometry(
-			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas
-		) noexcept;
+			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>&
+				wait_semas) noexcept;
 
 		/**
 		 * @brief Records and submits the commands of `ImGui_ImplVulkan_RenderDrawData()`.
@@ -85,8 +85,8 @@ namespace mxn::vk
 		 * @returns The semaphore which will signal when rendering is complete.
 		 */
 		[[nodiscard]] const ::vk::Semaphore& render_imgui(
-			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>& wait_semas
-		) noexcept;
+			const ::vk::ArrayProxyNoTemporaries<const ::vk::Semaphore>&
+				wait_semas) noexcept;
 
 		/**
 		 * @brief Submits the current swapchain frame to the present queue.
@@ -102,9 +102,9 @@ namespace mxn::vk
 			const std::filesystem::path&, const std::string& debug_name = "") const;
 
 		[[nodiscard]] material create_material(
-			const std::filesystem::path& albedo = "", const std::filesystem::path& normal = "",
-			const std::string& debug_name = ""
-		) const;
+			const std::filesystem::path& albedo = "",
+			const std::filesystem::path& normal = "",
+			const std::string& debug_name = "") const;
 
 		[[nodiscard]] ::vk::CommandBuffer begin_onetime_buffer() const;
 		/// @brief Ends, submits, and frees the given buffer.
@@ -120,7 +120,8 @@ namespace mxn::vk
 			return images.size();
 		}
 
-		[[nodiscard]] constexpr const ::vk::Extent2D& get_swapchain_extent() const noexcept
+		[[nodiscard]] constexpr const ::vk::Extent2D& get_swapchain_extent()
+			const noexcept
 		{
 			return extent;
 		}
@@ -131,7 +132,8 @@ namespace mxn::vk
 			assert(obj);
 
 			device.setDebugUtilsObjectNameEXT(
-				{ T::objectType, reinterpret_cast<uint64_t>(static_cast<T::CType>(obj)),
+				{ T::objectType,
+				  reinterpret_cast<uint64_t>(static_cast<typename T::CType>(obj)),
 				  name.c_str() },
 				dispatch_loader);
 		}

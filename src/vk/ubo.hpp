@@ -10,6 +10,13 @@
 #include <string>
 #include <vector>
 
+template<typename T>
+concept like_std_container = requires(T t)
+{
+	t.data();
+	t.size();
+};
+
 namespace mxn::vk
 {
 	class context;
@@ -27,9 +34,6 @@ namespace mxn::vk
 		T data;
 
 	private:
-		static constexpr bool T_inner_ptr = requires(const T& t) { t.data(); };
-		static constexpr bool T_size_func = requires(const T& t) { t.size(); };
-
 		vma_buffer buffer, staging;
 
 		vma_buffer ctor_mkbuf(
@@ -42,8 +46,8 @@ namespace mxn::vk
 		ubo(const context&, uint32_t shared_queuefamily_a, uint32_t shared_queuefamily_b,
 			const std::string& debug_postfix = "");
 
-		void update(const context&) requires T_inner_ptr;
 		void update(const context&);
+		void update(const context&) requires like_std_container<T>;
 
 		/// @note Has no effect on `data`.
 		void destroy(const context&);

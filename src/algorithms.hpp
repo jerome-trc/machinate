@@ -1,7 +1,5 @@
-/**
- * @file algo.hpp
- * @brief Helper functions in the style of those from the <algorith> STL header.
- */
+/// @file algorithms.hpp
+/// @brief Helper functions in the style of those from the <algorithm> STL header.
 
 #pragma once
 
@@ -20,7 +18,7 @@ template<class T>
 template<class I>
 [[nodiscard]] bool all_elements_unique(I first, I last)
 {
-	using T = std::iterator_traits<I>::value_type;
+	using T = typename std::iterator_traits<I>::value_type;
 
 	if ((last - first) == 0) return false;
 

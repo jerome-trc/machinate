@@ -39,9 +39,9 @@ int main(const int arg_c, const char* const argv[])
 		Machinate_VERSION_PATCH);
 
 	// Seed `rand()` for trivial RNG uses
-	const auto curTime = std::chrono::system_clock::now().time_since_epoch().count();
-	const auto curTime_uint = static_cast<unsigned int>(curTime);
-	srand(curTime_uint);
+	const auto curtime = std::chrono::system_clock::now().time_since_epoch().count();
+	const auto curtime_uint = static_cast<unsigned int>(curtime);
+	srand(curtime_uint);
 
 	mxn::vfs_init(argv[0]);
 	mxn::vfs_mount("assets", "/");
@@ -78,7 +78,7 @@ int main(const int arg_c, const char* const argv[])
 		  .func = [&](const std::vector<std::string>& args) -> void {
 			  mxn::ccmd_file(args.size() > 1 ? args[1] : "/");
 		  },
-		  .help = [](const std::vector<std::string>& args) -> void {
+		  .help = [](const std::vector<std::string>&) -> void {
 			  MXN_LOG("List the contents of a directory in the virtual file system.");
 		  } });
 	console->add_command({ .key = "sound",
@@ -90,7 +90,7 @@ int main(const int arg_c, const char* const argv[])
 							   else
 								   media.play_sound(args[1]);
 						   },
-						   .help = [](const std::vector<std::string>& args) -> void {
+						   .help = [](const std::vector<std::string>&) -> void {
 							   MXN_LOGF(
 								   "Usage: sound <arg>\n{}",
 								   "If <arg> is \"~\" or \"!\", all sound is stopped.");
@@ -104,7 +104,7 @@ int main(const int arg_c, const char* const argv[])
 			  else
 				  media.play_music(args[1]);
 		  },
-		  .help = [](const std::vector<std::string>& args) -> void {
+		  .help = [](const std::vector<std::string>&) -> void {
 			  MXN_LOGF(
 				  "Usage: music <arg>\n{}\n{}",
 				  "If no <arg> is given, the path of the current music is printed.",

@@ -96,6 +96,11 @@ set(MXN_LIBS
 	xxHash::xxhash
 )
 
+if(UNIX AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	find_package(X11 REQUIRED)
+	list(APPEND MXN_LIBS X11::X11)
+endif()
+
 if(UNIX)
 	list(APPEND MXN_LIBS dl)
 endif()

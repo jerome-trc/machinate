@@ -49,13 +49,13 @@ namespace mxn
 #define MXN_CRIT(msg) LOG_CRITICAL(mxn::qlog, "{}", msg)
 
 /** @brief Like `MXN_LOG`, but allows {fmt}-style variadic formatting. */
-#define MXN_LOGF(msg, ...) LOG_INFO(mxn::qlog, msg, ##__VA_ARGS__)
+#define MXN_LOGF(msg, ...) LOG_INFO(mxn::qlog, msg, __VA_ARGS__)
 /** @brief Like `MXN_WARN`, but allows {fmt}-style variadic formatting. */
-#define MXN_WARNF(msg, ...) LOG_WARNING(mxn::qlog, msg, ##__VA_ARGS__)
+#define MXN_WARNF(msg, ...) LOG_WARNING(mxn::qlog, msg, __VA_ARGS__)
 /** @brief Like `MXN_ERR`, but allows {fmt}-style variadic formatting. */
-#define MXN_ERRF(msg, ...) LOG_ERROR(mxn::qlog, msg, ##__VA_ARGS__)
+#define MXN_ERRF(msg, ...) LOG_ERROR(mxn::qlog, msg, __VA_ARGS__)
 /** @brief Like `MXN_CRIT`, but allows {fmt}-style variadic formatting. */
-#define MXN_CRITF(msg, ...) LOG_CRITICAL(mxn::qlog, msg, ##__VA_ARGS__)
+#define MXN_CRITF(msg, ...) LOG_CRITICAL(mxn::qlog, msg, __VA_ARGS__)
 
 #ifndef NDEBUG
 

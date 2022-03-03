@@ -71,23 +71,23 @@ mxn::vk::ubo<T, Sz>::ubo(
 }
 
 template<typename T, size_t Sz>
-void mxn::vk::ubo<T, Sz>::update(const context& ctxt) requires ubo<T, Sz>::T_inner_ptr
-{
-	void* d = nullptr;
-	const auto res = vmaMapMemory(ctxt.vma, staging.allocation, &d);
-	assert(res == VK_SUCCESS);
-	memcpy(d, reinterpret_cast<void*>(data.data()), data_size);
-	vmaUnmapMemory(ctxt.vma, staging.allocation);
-	staging.copy_to(ctxt, buffer, { ::vk::BufferCopy(0, 0, data_size) });
-}
-
-template<typename T, size_t Sz>
 void mxn::vk::ubo<T, Sz>::update(const context& ctxt)
 {
 	void* d = nullptr;
 	const auto res = vmaMapMemory(ctxt.vma, staging.allocation, &d);
 	assert(res == VK_SUCCESS);
 	memcpy(d, reinterpret_cast<void*>(&data), data_size);
+	vmaUnmapMemory(ctxt.vma, staging.allocation);
+	staging.copy_to(ctxt, buffer, { ::vk::BufferCopy(0, 0, data_size) });
+}
+
+template<typename T, size_t Sz>
+void mxn::vk::ubo<T, Sz>::update(const context& ctxt) requires like_std_container<T>
+{
+	void* d = nullptr;
+	const auto res = vmaMapMemory(ctxt.vma, staging.allocation, &d);
+	assert(res == VK_SUCCESS);
+	memcpy(d, reinterpret_cast<void*>(data.data()), data_size);
 	vmaUnmapMemory(ctxt.vma, staging.allocation);
 	staging.copy_to(ctxt, buffer, { ::vk::BufferCopy(0, 0, data_size) });
 }
