@@ -11,10 +11,6 @@
 
 #include <imgui.h>
 
-#ifdef ERROR // WinGDI macro conflicts with line_type_t::ERROR
-#undef ERROR
-#endif
-
 mxn::console::console()
 {
 	memset(input_buffer, 0, sizeof(input_buffer));
