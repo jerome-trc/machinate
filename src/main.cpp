@@ -67,7 +67,7 @@ int main(const int arg_c, const char* const argv[])
 						   .func = [&](const std::vector<std::string>& args) -> void {
 							   vulkan.vkdiag(std::move(args));
 						   },
-						   .help = [](const std::vector<std::string>& args) -> void {
+						   .help = [](const std::vector<std::string>&) -> void {
 							   MXN_LOG(
 								   "Print information about the Vulkan renderer or this "
 								   "system's Vulkan implementation.");
