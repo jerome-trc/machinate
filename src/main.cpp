@@ -14,13 +14,12 @@
 #include <Tracy.hpp>
 #include <imgui_impl_sdl.h>
 #include <imgui_impl_vulkan.h>
+#include <sol/sol.hpp>
 
 int main(const int arg_c, const char* const argv[])
 {
 	if (arg_c <= 0)
-	{
-		throw std::invalid_argument("`main()` requires at least the executable name.");
-	}
+	{ throw std::invalid_argument("`main()` requires at least the executable name."); }
 
 	tracy::SetThreadName("MXN: Main");
 
@@ -46,6 +45,9 @@ int main(const int arg_c, const char* const argv[])
 	mxn::vfs_init(argv[0]);
 	mxn::vfs_mount("assets", "/");
 
+	sol::state lua;
+	mxn::lua::setup_state(lua);
+
 	mxn::media_context media;
 	mxn::window main_window("Machinate");
 	mxn::vk::context vulkan(main_window.get_sdl_window());
@@ -54,9 +56,6 @@ int main(const int arg_c, const char* const argv[])
 	mxn::vk::ubo<mxn::vk::camera> vk_cam(vulkan, "MXN: UBO, Camera");
 
 	// Script backend initialisation
-	NEED_ALL_DEFAULT_MODULES;
-	NEED_MODULE(script_core);
-	das::Module::Initialize();
 
 	bool running = true;
 	bool draw_imgui_metrics = true;
@@ -80,6 +79,40 @@ int main(const int arg_c, const char* const argv[])
 		  },
 		  .help = [](const std::vector<std::string>&) -> void {
 			  MXN_LOG("List the contents of a directory in the virtual file system.");
+		  } });
+	console->add_command(
+		{ .key = "lua",
+		  .func = [&](const std::vector<std::string>& args) -> void {
+			  // Command needs an argument
+			  if (args.size() < 2 || args[1] == "" || args[1] == " ")
+			  {
+				  MXN_LOGF("Example usage: {} print ('foobar')", args[0]);
+				  return;
+			  }
+
+			  const std::string script = str_concat(args.begin() + 1, args.end(), " ");
+
+			  const auto result = lua.safe_script(script);
+
+			  if (!result.valid())
+			  {
+				  const sol::error& err = result;
+				  MXN_LOG(err.what());
+				  return;
+			  }
+
+			  MXN_LOG("Lua script ran successfully.");
+		  },
+		  .help = [&](const std::vector<std::string>&) -> void {
+			  MXN_LOG("Run a script on the client's Lua state.");
+		  } });
+	console->add_command(
+		{ .key = "lua_heap",
+		  .func = [&](const std::vector<std::string>&) -> void {
+			  MXN_LOGF("Client Lua heap size: {}B", lua.memory_used());
+		  },
+		  .help = [&](const std::vector<std::string>&) -> void {
+			  MXN_LOG("Report on the heap sizes in bytes of all Lua states.");
 		  } });
 	console->add_command({ .key = "sound",
 						   .func = [&](const std::vector<std::string>& args) -> void {
@@ -189,7 +222,6 @@ int main(const int arg_c, const char* const argv[])
 
 	vk_cam.destroy(vulkan);
 
-	das::Module::Shutdown();
 	MXN_LOGF("Runtime duration: {}", mxn::runtime_s());
 	mxn::vfs_deinit();
 	quill::flush();

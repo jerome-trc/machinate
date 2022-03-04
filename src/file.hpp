@@ -40,6 +40,7 @@ namespace mxn
 	[[nodiscard]] uint32_t vfs_count(const std::filesystem::path&) noexcept;
 
 	std::vector<unsigned char> vfs_read(const std::filesystem::path&);
+	std::string vfs_readstr(const std::filesystem::path& path);
 	void vfs_recur(const std::filesystem::path&, void* userdata, vfs_enumerator);
 
 	void ccmd_file(const std::string& path);

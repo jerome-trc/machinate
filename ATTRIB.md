@@ -32,6 +32,10 @@ Note that this is a living document. Completeness is not guaranteed. If no autho
 	- By Nikos "realnc" Chantziaras et. al.
 	- Used under the [GNU Lesser General Public License 3.0](https://github.com/realnc/SDL_audiolib/blob/master/COPYING).
 	- https://github.com/realnc/SDL_audiolib
+- Serpent
+	- By Paul "pkulchenko" Kulchenko et. al.
+	- Used under the [MIT License](https://github.com/pkulchenko/serpent/blob/master/LICENSE).
+	- https://github.com/pkulchenko/serpent
 - Simple DirectMedia Layer 2 (SDL2)
 	- By Sam Lantinga et. al
 	- https://www.libsdl.org/
@@ -61,6 +65,9 @@ Note that this is a living document. Completeness is not guaranteed. If no autho
 	- By Lars "TheLartians" Melchior et. al.
 	- Unlicensed.
 	- https://github.com/TheLartians/Ccache.cmake
+- CMake module for finding LuaJIT from Google
+	- See the file itself for licensing info.
+	- https://android.googlesource.com/platform/external/bcc/+/master/cmake/FindLuaJIT.cmake
 
 ## Code
 

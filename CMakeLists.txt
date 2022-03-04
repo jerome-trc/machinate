@@ -54,6 +54,7 @@ set(MXN_COMPILE_OPTIONS
 set(MXN_COMPILE_DEFS
 	GLM_FORCE_DEPTH_ZERO_TO_ONE # For Vulkan (OpenGL is -1.0 to 1.0)
 	GLM_FORCE_RADIANS
+	SOL_LUAJIT
 	WIN32_LEAN_AND_MEAN
 )
 
@@ -74,8 +75,9 @@ set(THIRD_PARTY "${CMAKE_SOURCE_DIR}/src/include")
 include("${CMAKE_SOURCE_DIR}/cmake/Libraries.cmake")
 
 if(MSVC)
+	# MSVC appears to require some extra Lua linkage
 	# winmm and imm32 are required by ImGui
-	list(APPEND MXN_LIBS winmm imm32)
+	list(APPEND MXN_LIBS winmm imm32 ${LUA_LIBRARY})
 endif()
 
 # Targets: Game client #########################################################
@@ -84,6 +86,7 @@ add_executable(${PROJECT_NAME}
 	"${CMAKE_SOURCE_DIR}/src/console.cpp"
 	"${CMAKE_SOURCE_DIR}/src/main.cpp"
 	"${CMAKE_SOURCE_DIR}/src/media.cpp"
+	"${CMAKE_SOURCE_DIR}/src/script.cpp"
 	"${CMAKE_SOURCE_DIR}/src/utils.cpp"
 
 	"${CMAKE_SOURCE_DIR}/src/vk/buffer.cpp"
@@ -107,7 +110,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_BINARY_DIR})
 target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
 	${THIRD_PARTY}
-	"${daScript_SOURCE_DIR}/include"
+	${LUAJIT_INCLUDE_DIR}
 	${PHYSFS_INCLUDE_DIR}
 	"${CMAKE_SOURCE_DIR}/tracy"
 )
@@ -123,7 +126,7 @@ file(GLOB_RECURSE MXN_ASSETS RELATIVE "${CMAKE_SOURCE_DIR}/assets"
 	"${CMAKE_SOURCE_DIR}/assets/fonts/*"
 	"${CMAKE_SOURCE_DIR}/assets/loc/*"
 	"${CMAKE_SOURCE_DIR}/assets/meshes/*"
-	"${CMAKE_SOURCE_DIR}/assets/scripts/*"
+	"${CMAKE_SOURCE_DIR}/assets/lua/*"
 	"${CMAKE_SOURCE_DIR}/assets/textures/*"
 )
 

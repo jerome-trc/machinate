@@ -1,37 +1,37 @@
-/**
- * @file script.hpp
- * @brief Interfaces and helpers for daScript.
- */
+/// @file script.hpp
+/// @brief Lua scripting interfaces and utilities.
+
+#include <filesystem>
 
 #pragma once
 
-#include "log.hpp"
-
-#include <daScript/daScript.h>
-
-namespace mxn
+namespace sol
 {
-	class script_core final : public das::Module
-	{
-		static void log(const char* msg) { MXN_LOG(msg); }
-		static void warn(const char* msg) { MXN_WARN(msg); }
-		static void err(const char* msg) { MXN_ERR(msg); }
+	class state;
+	class protected_function_result;
 
-	public:
-		script_core() : das::Module("mxn_core")
-		{
-			das::ModuleLibrary lib;
-			lib.addModule(this);
-			lib.addBuiltInModule();
+	template<bool B>
+	class basic_reference;
 
-			das::addExtern<DAS_BIND_FUN(log)>(
-				*this, lib, "mxn_log", das::SideEffects::worstDefault, "log");
-			das::addExtern<DAS_BIND_FUN(warn)>(
-				*this, lib, "mxn_warn", das::SideEffects::worstDefault, "warn");
-			das::addExtern<DAS_BIND_FUN(err)>(
-				*this, lib, "mxn_err", das::SideEffects::worstDefault, "err");
-		}
-	};
+	using reference = basic_reference<false>;
+
+	template<typename T>
+	class basic_object;
+
+	using object = basic_object<reference>;
+}
+
+namespace mxn::lua
+{
+	/// @brief Prepares a Sol2 state for use.
+	///
+	/// Calls `sol::state::load_libraries()`, sets up logging functions, and then
+	/// prepares the import function, Teal compiler, and utility modules.
+	void setup_state(sol::state&);
+
+	sol::protected_function_result safe_script_file(
+		sol::state&, const std::filesystem::path&);
+
+	sol::object require_file(sol::state&, const std::string& key,
+		const std::filesystem::path&, bool create_global = true);
 } // namespace mxn
-
-REGISTER_MODULE_IN_NAMESPACE(script_core, mxn);
