@@ -10,9 +10,11 @@ Note that this is a living document. Completeness is not guaranteed. If no autho
 - Dear ImGui
 	- By Omar "ocornut" Cornut et. al.
 	- Used under the [MIT License](https://github.com/ocornut/imgui/blob/master/LICENSE.txt).
+	- https://github.com/ocornut/imgui
 - {fmt}
 	- By Victor "zitaut" Zverovich et. al.
 	- [See licensing information.](https://github.com/fmtlib/fmt/blob/master/LICENSE.rst)
+	- https://github.com/fmtlib/fmt
 - Magic Enum
 	- By Daniil "Neargye" Goncharov et. al.
 	- Used under the [MIT License](https://github.com/Neargye/magic_enum/blob/master/LICENSE).
@@ -38,6 +40,7 @@ Note that this is a living document. Completeness is not guaranteed. If no autho
 	- https://github.com/pkulchenko/serpent
 - Simple DirectMedia Layer 2 (SDL2)
 	- By Sam Lantinga et. al
+	- Used under the [zlib License](https://www.libsdl.org/license.php).
 	- https://www.libsdl.org/
 - Simple OpenGL Image Library 2 (SOIL2)
 	- By Martín Lucas "SpartanJ" Golini et. al.
@@ -46,6 +49,7 @@ Note that this is a living document. Completeness is not guaranteed. If no autho
 - Tracy
 	- By Bartosz "wolfpld" Taudul et. al.
 	- Used under the [BSD 3-Clause License](https://github.com/wolfpld/tracy/blob/master/LICENSE).
+	- https://github.com/wolfpld/tracy
 - Vulkan
 	- By the Khronos Group.
 	- [See licensing information.](https://www.khronos.org/legal/trademarks/)
