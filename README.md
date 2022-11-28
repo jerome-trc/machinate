@@ -1,6 +1,6 @@
 # Machinate
 
-Machinate is a personal project meant to:
+Machinate was a personal project meant to:
 
 1. Refine my skills in C/C++ and game engine technology/architecture;
 2. Expand my knowledge about optimisation, API design, and concurrency;
@@ -15,7 +15,3 @@ Machinate is distributed under the [MIT License](/LICENSE).
 ## Credits and Attribution
 
 See the [complete credits document](/doc/ATTRIB.md).
-
-## Building
-
-Coming soon.
